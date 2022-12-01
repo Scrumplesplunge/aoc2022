@@ -1,4 +1,10 @@
--- parseInput :: [Char] -> [[Int]]
+-- Assuming these builtins:
+--   split :: String -> String -> [String]
+--   map :: (a -> b) -> [a] -> [b]
+--   readInt :: String -> Int
+--   showInt :: Int -> String
+
+-- parseInput :: String -> [[Int]]
 parseInput = map (readInt . split "\n") . split "\n\n"
 
 -- sum :: [Int] -> Int
@@ -14,7 +20,7 @@ max a b = if a < b then b else a
 part1 es =
   case es of
     [] -> 0
-    (e : es') -> max e (part1 es')
+    (e : es') -> max (sum e) (part1 es')
 
--- main :: [Char] -> [Char]
+-- main :: String -> String
 main = showInt . part1 . parseInput
