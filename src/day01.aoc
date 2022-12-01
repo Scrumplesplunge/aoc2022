@@ -1,0 +1,20 @@
+-- parseInput :: [Char] -> [[Int]]
+parseInput = map (readInt . split "\n") . split "\n\n"
+
+-- sum :: [Int] -> Int
+sum xs =
+  case xs of
+    [] -> 0
+    (x : xs') -> x + sum xs
+
+-- max :: Int -> Int -> Int
+max a b = if a < b then b else a
+
+-- part1 :: [[Int]] -> Int
+part1 es =
+  case es of
+    [] -> 0
+    (e : es') -> max e (part1 es')
+
+-- main :: [Char] -> [Char]
+main = showInt . part1 . parseInput
