@@ -1,5 +1,6 @@
 #include "debug_output.hpp"
 #include "lexer.hpp"
+#include "parser.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -22,4 +23,7 @@ int main(int argc, char* argv[]) {
   for (const auto& token : tokens) {
     std::cout << token << '\n';
   }
+  std::cout << '\n';
+  const aoc2022::syntax::Program program = aoc2022::Parse(tokens);
+  std::cout << program << '\n';
 }

@@ -52,6 +52,11 @@ bool IsOperator(char c) {
   return false;
 }
 
+struct IndentationLevel {
+  Location location;
+  int amount;
+};
+
 struct Lexer {
   template <typename... Args>
   std::runtime_error Error(const Args&... args) {
@@ -78,6 +83,7 @@ struct Lexer {
     }
     assert(!cursor.empty() && cursor[0] == '\n');
     Advance(1);
+    HandleIndent();
   }
 
   void SkipToNext() {
@@ -102,50 +108,54 @@ struct Lexer {
   }
 
   void HandleIndent() {
+    const Location location(line, column);
     const char* const first = cursor.data();
     const char* const end = first + cursor.size();
     const char* i = first;
-    int new_indent = 0;
-    while (i != end && *i == ' ') new_indent++;
+    while (i != end && *i == ' ') i++;
+    const int new_indent = i - first;
     Advance(i - first);
     if (cursor.starts_with("\n") || cursor.starts_with("--")) {
-      SkipLineEnd();
-      return HandleIndent();
+      return SkipLineEnd();
     }
-    if (indentation_levels.back() < new_indent) {
-      tokens.push_back(Space::kIndent);
-      indentation_levels.push_back(new_indent);
-    } else if (indentation_levels.back() > new_indent) {
-      while (indentation_levels.back() > new_indent) {
-        tokens.push_back(Space::kDedent);
+    if (indentation_levels.back().amount < new_indent) {
+      tokens.emplace_back(location, Space::kIndent);
+      indentation_levels.push_back({location, new_indent});
+    } else if (indentation_levels.back().amount > new_indent) {
+      while (indentation_levels.back().amount > new_indent) {
+        tokens.emplace_back(location, Space::kDedent);
         indentation_levels.pop_back();
       }
       // The new indentation level must be equal to some previous one, not
       // a previously unseen indentation level.
-      if (indentation_levels.back() != new_indent) {
+      if (indentation_levels.back().amount != new_indent) {
         throw Error("bad indentation");
       }
     } else {
-      tokens.push_back(Space::kNewline);
+      tokens.emplace_back(location, Space::kNewline);
     }
   }
 
   void Lex() {
     while (true) {
       SkipToNext();
-      if (cursor.empty()) return;
+      const Location location(line, column);
+      if (cursor.empty()) {
+        tokens.emplace_back(location, Space::kEnd);
+        return;
+      }
       const char c = cursor[0];
       if (c == '(') {
-        tokens.push_back(Symbol::kOpenParen);
+        tokens.emplace_back(location, Symbol::kOpenParen);
         Advance(1);
       } else if (c == ')') {
-        tokens.push_back(Symbol::kCloseParen);
+        tokens.emplace_back(location, Symbol::kCloseParen);
         Advance(1);
       } else if (c == '[') {
-        tokens.push_back(Symbol::kOpenSquare);
+        tokens.emplace_back(location, Symbol::kOpenSquare);
         Advance(1);
       } else if (c == ']') {
-        tokens.push_back(Symbol::kCloseSquare);
+        tokens.emplace_back(location, Symbol::kCloseSquare);
         Advance(1);
       } else if (c == '\'') {
         LexCharacter();
@@ -181,6 +191,7 @@ struct Lexer {
   }
 
   void LexCharacter() {
+    const Location location(line, column);
     if (!ConsumePrefix("'")) throw Error("bad character literal");
     if (cursor.size() < 2) throw Error("unterminated character literal");
     if (cursor[0] == '\'') throw Error("empty character literal");
@@ -202,10 +213,11 @@ struct Lexer {
       Advance(1);
     }
     if (!ConsumePrefix("'")) throw Error("expected '\\''");
-    tokens.push_back(Character(value));
+    tokens.emplace_back(location, Character(value));
   }
 
   void LexString() {
+    const Location location(line, column);
     if (cursor.empty() || cursor[0] != '"') {
       throw Error("expected string literal");
     }
@@ -214,7 +226,7 @@ struct Lexer {
     while (true) {
       if (cursor.empty()) throw Error("unterminated string literal");
       if (ConsumePrefix("\"")) {
-        tokens.push_back(String(std::move(value)));
+        tokens.emplace_back(location, String(std::move(value)));
         return;
       }
       if (cursor[0] == '\\') {
@@ -238,6 +250,7 @@ struct Lexer {
   }
 
   void LexInteger() {
+    const Location location(line, column);
     const std::string_view word = PeekWord();
     std::int64_t value = 0;
     for (char c : word) {
@@ -245,35 +258,38 @@ struct Lexer {
       value = 10 * value + (c - '0');
     }
     Advance(word.size());
-    tokens.push_back(Integer(value));
+    tokens.emplace_back(location, Integer(value));
   }
 
   void LexIdentifierOrKeyword() {
+    const Location location(line, column);
     const std::string_view word = PeekWord();
     if (word.empty() || !IsIdentifierStart(word[0])) {
       throw Error("bad identifier");
     }
     const auto i = keywords.find(word);
     if (i == keywords.end()) {
-      tokens.push_back(Identifier(std::string(word)));
+      tokens.emplace_back(location, Identifier(std::string(word)));
     } else {
-      tokens.push_back(i->second);
+      tokens.emplace_back(location, i->second);
     }
     Advance(word.size());
   }
-  
+
   void LexOperator() {
+    const Location location(line, column);
     const std::string_view op = PeekSequence<IsOperator>();
     const auto i = operators.find(op);
     if (i == operators.end()) throw Error("bad operator");
     Advance(op.size());
-    tokens.push_back(i->second);
+    tokens.emplace_back(location, i->second);
   }
 
   int line = 1;
   int column = 1;
   std::string_view cursor;
-  std::vector<int> indentation_levels = {0};
+  std::vector<IndentationLevel> indentation_levels = {{
+      .location = {.line = 1, .column = 1}, .amount = 0}};
   std::vector<Token> tokens = {};
 };
 

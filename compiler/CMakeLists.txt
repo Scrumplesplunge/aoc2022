@@ -16,5 +16,13 @@ target_link_libraries(debug_output token)
 add_library(lexer lexer.cpp lexer.hpp)
 target_link_libraries(lexer token)
 
+add_library(variant variant.cpp variant.hpp)
+
+add_library(syntax syntax.cpp syntax.hpp)
+target_link_libraries(syntax variant)
+
+add_library(parser parser.cpp parser.hpp)
+target_link_libraries(parser token syntax)
+
 add_executable(compiler compiler.cpp)
-target_link_libraries(compiler lexer debug_output)
+target_link_libraries(compiler lexer parser debug_output)

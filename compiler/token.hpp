@@ -7,15 +7,36 @@
 
 namespace aoc2022 {
 
-struct Identifier { std::string value; };
-struct Integer { std::int64_t value; };
-struct Character { char value; };
-struct String { std::string value; };
+struct Location {
+  bool operator==(const Location&) const = default;
+  int line, column;
+};
+
+struct Identifier {
+  bool operator==(const Identifier&) const = default;
+  std::string value;
+};
+
+struct Integer {
+  bool operator==(const Integer&) const = default;
+  std::int64_t value;
+};
+
+struct Character {
+  bool operator==(const Character&) const = default;
+  char value;
+};
+
+struct String {
+  bool operator==(const String&) const = default;
+  std::string value;
+};
 
 enum class Space {
   kIndent,
   kDedent,
   kNewline,
+  kEnd,
 };
 
 enum class Keyword {
@@ -29,6 +50,7 @@ enum class Symbol {
   kCloseParen,   // ")"
   kOpenSquare,   // "["
   kCloseSquare,  // "]"
+  kComma,        // ","
   kEquals,       // "="
   kDot,          // "."
   kColon,        // ":"
@@ -38,9 +60,23 @@ enum class Symbol {
 };
 
 struct Token {
-  template <typename... Args>
-  Token(Args&&... args) : value(std::forward<Args>(args)...) {}
+  // These values match the index for the corresponding type in the value
+  // variant.
+  enum Type {
+    kIdentifier,
+    kInteger,
+    kCharacter,
+    kString,
+    kSpace,
+    kKeyword,
+    kSymbol,
+  };
 
+  template <typename... Args>
+  Token(Location location, Args&&... args)
+      : location(location), value(std::forward<Args>(args)...) {}
+
+  Location location;
   std::variant<Identifier, Integer, Character, String, Space, Keyword, Symbol>
       value;
 };

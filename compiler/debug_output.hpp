@@ -2,6 +2,7 @@
 #define AOC2022_DEBUG_OUTPUT_HPP_
 
 #include "token.hpp"
+#include "syntax.hpp"
 
 #include <iostream>
 
@@ -16,6 +17,26 @@ std::ostream& operator<<(std::ostream&, Keyword);
 std::ostream& operator<<(std::ostream&, Symbol);
 std::ostream& operator<<(std::ostream&, const Token&);
 
+namespace syntax {
+
+std::ostream& operator<<(std::ostream&, const Identifier&);
+std::ostream& operator<<(std::ostream&, const Integer&);
+std::ostream& operator<<(std::ostream&, const Character&);
+std::ostream& operator<<(std::ostream&, const String&);
+std::ostream& operator<<(std::ostream&, const List&);
+std::ostream& operator<<(std::ostream&, const LessThan&);
+std::ostream& operator<<(std::ostream&, const Add&);
+std::ostream& operator<<(std::ostream&, const Cons&);
+std::ostream& operator<<(std::ostream&, const Apply&);
+std::ostream& operator<<(std::ostream&, const Compose&);
+std::ostream& operator<<(std::ostream&, const Alternative&);
+std::ostream& operator<<(std::ostream&, const Case&);
+std::ostream& operator<<(std::ostream&, const If&);
+std::ostream& operator<<(std::ostream&, const Expression&);
+std::ostream& operator<<(std::ostream&, const Definition&);
+std::ostream& operator<<(std::ostream&, const Program&);
+
+}  // namespace syntax
 }  // namespace aoc2022
 
 #endif  // AOC2022_DEBUG_OUTPUT_HPP_

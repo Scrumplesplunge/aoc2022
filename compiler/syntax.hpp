@@ -1,0 +1,136 @@
+#ifndef AOC2022_SYNTAX_HPP_
+#define AOC2022_SYNTAX_HPP_
+
+#include "token.hpp"
+#include "variant.hpp"
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace aoc2022::syntax {
+
+struct ExpressionVariant;
+class Expression {
+ public:
+  template <HoldableBy<ExpressionVariant> T>
+  Expression(T value);
+  const ExpressionVariant& operator*() const;
+  const ExpressionVariant* operator->() const { return &(**this); }
+  bool operator==(const Expression&) const;
+ private:
+  std::shared_ptr<const ExpressionVariant> value_;
+};
+
+struct Identifier {
+  bool operator==(const Identifier&) const = default;
+  Location location;
+  std::string value;
+};
+
+struct Integer {
+  bool operator==(const Integer&) const = default;
+  Location location;
+  std::int64_t value;
+};
+
+struct Character {
+  bool operator==(const Character&) const = default;
+  Location location;
+  char value;
+};
+
+struct String {
+  bool operator==(const String&) const = default;
+  Location location;
+  std::string value;
+};
+
+struct List {
+  bool operator==(const List&) const = default;
+  Location location;
+  std::vector<Expression> elements;
+};
+
+struct LessThan {
+  bool operator==(const LessThan&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Add {
+  bool operator==(const Add&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Cons {
+  bool operator==(const Cons&) const = default;
+  Location location;
+  Expression head, tail;
+};
+
+struct Apply {
+  bool operator==(const Apply&) const = default;
+  Location location;
+  Expression f, x;
+};
+
+struct Compose {
+  bool operator==(const Compose&) const = default;
+  Location location;
+  Expression f, g;
+};
+
+struct Alternative {
+  bool operator==(const Alternative&) const = default;
+  Location location;
+  Expression pattern, value;
+};
+
+struct Case {
+  bool operator==(const Case&) const = default;
+  Location location;
+  Expression value;
+  std::vector<Alternative> alternatives;
+};
+
+struct If {
+  bool operator==(const If&) const = default;
+  Location location;
+  Expression condition, then_branch, else_branch;
+};
+
+struct ExpressionVariant {
+  bool operator==(const ExpressionVariant&) const = default;
+  std::variant<Identifier, Integer, Character, String, List, LessThan, Add,
+               Cons, Apply, Compose, Case, If>
+      value;
+};
+
+template <HoldableBy<ExpressionVariant> T>
+Expression::Expression(T value)
+    : value_(std::make_shared<ExpressionVariant>(
+          ExpressionVariant{.value = std::move(value)})) {}
+
+inline const ExpressionVariant& Expression::operator*() const {
+  return *value_;
+}
+
+struct Definition {
+  bool operator==(const Definition&) const = default;
+  Location location;
+  Identifier name;
+  std::vector<Identifier> parameters;
+  Expression value;
+};
+
+struct Program {
+  bool operator==(const Program&) const = default;
+  std::vector<Definition> definitions;
+};
+
+}  // namespace aoc2022::syntax
+
+#endif  // AOC2022_SYNTAX_HPP_
