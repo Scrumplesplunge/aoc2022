@@ -1,6 +1,7 @@
 #include "debug_output.hpp"
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "checker.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -25,5 +26,7 @@ int main(int argc, char* argv[]) {
   }
   std::cout << '\n';
   const aoc2022::syntax::Program program = aoc2022::Parse(tokens);
-  std::cout << program << '\n';
+  std::cout << program << "\n\n";
+  const aoc2022::core::Expression ir = aoc2022::Check(program);
+  std::cout << ir << '\n';
 }

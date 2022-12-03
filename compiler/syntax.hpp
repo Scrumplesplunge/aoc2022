@@ -18,6 +18,7 @@ class Expression {
   Expression(T value);
   const ExpressionVariant& operator*() const;
   const ExpressionVariant* operator->() const { return &(**this); }
+  const Location& location() const;
   bool operator==(const Expression&) const;
  private:
   std::shared_ptr<const ExpressionVariant> value_;
@@ -116,6 +117,11 @@ Expression::Expression(T value)
 
 inline const ExpressionVariant& Expression::operator*() const {
   return *value_;
+}
+
+inline const Location& Expression::location() const {
+  return std::visit([](const auto& x) -> const Location& { return x.location; },
+                    value_->value);
 }
 
 struct Definition {

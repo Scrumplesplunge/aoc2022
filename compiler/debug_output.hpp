@@ -1,6 +1,7 @@
 #ifndef AOC2022_DEBUG_OUTPUT_HPP_
 #define AOC2022_DEBUG_OUTPUT_HPP_
 
+#include "core.hpp"
 #include "token.hpp"
 #include "syntax.hpp"
 
@@ -37,6 +38,29 @@ std::ostream& operator<<(std::ostream&, const Definition&);
 std::ostream& operator<<(std::ostream&, const Program&);
 
 }  // namespace syntax
+
+namespace core {
+
+std::ostream& operator<<(std::ostream&, const Identifier&);
+
+std::ostream& operator<<(std::ostream&, const Decons&);
+std::ostream& operator<<(std::ostream&, const Pattern&);
+
+std::ostream& operator<<(std::ostream&, const Builtin&);
+std::ostream& operator<<(std::ostream&, const Integer&);
+std::ostream& operator<<(std::ostream&, const Character&);
+std::ostream& operator<<(std::ostream&, const String&);
+std::ostream& operator<<(std::ostream&, const Cons&);
+std::ostream& operator<<(std::ostream&, const Apply&);
+std::ostream& operator<<(std::ostream&, const Lambda&);
+std::ostream& operator<<(std::ostream&, const Binding&);
+std::ostream& operator<<(std::ostream&, const Let&);
+std::ostream& operator<<(std::ostream&, const LetRecursive&);
+std::ostream& operator<<(std::ostream&, const Case::Alternative&);
+std::ostream& operator<<(std::ostream&, const Case&);
+std::ostream& operator<<(std::ostream&, const Expression&);
+
+}  // namespace core
 }  // namespace aoc2022
 
 #endif  // AOC2022_DEBUG_OUTPUT_HPP_
