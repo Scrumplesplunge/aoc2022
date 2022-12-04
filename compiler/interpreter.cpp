@@ -150,7 +150,7 @@ struct Value : public Node {
   std::int64_t AsInt64() const;
   char AsChar() const;
   const ConsData& AsCons() const;
-  void Enter();
+  void Enter(Interpreter&);
 };
 
 struct Bool final : public Value {
@@ -285,27 +285,87 @@ struct Case final : public Closure {
   const core::Case& definition;
 };
 
-struct Lambda final : public Value {
-  Lambda(Interpreter* interpreter, const core::Lambda& definition)
-      : interpreter(interpreter), definition(definition),
-        captures(interpreter->Resolve(definition)) {}
-  void Enter() {
-    for (const auto& [id, value] : captures) {
-      interpreter->names[id].push_back(value);
+struct Lambda : public Value {
+  Type GetType() const final { return Type::kLambda; };
+  virtual void Enter(Interpreter& interpreter) = 0;
+};
+
+struct NativeFunctionBase : public Node {
+  NativeFunctionBase(int arity) : arity(arity) {}
+  virtual void Enter(Interpreter& interpreter) = 0;
+  void MarkChildren() override {}
+  const int arity;
+};
+
+template <int n>
+struct NativeFunction : public NativeFunctionBase {
+  NativeFunction() : NativeFunctionBase(n) {}
+  void Enter(Interpreter& interpreter) final {
+    if (interpreter.stack.size() < n) {
+      throw std::logic_error("invoking native function with too few arguments");
     }
-    Lazy* v = interpreter->stack.back();
-    interpreter->names[definition.parameter].push_back(v);
-    interpreter->stack.back() = interpreter->LazyEvaluate(definition.result);
-    interpreter->names[definition.parameter].pop_back();
-    for (const auto& [id, value] : captures) {
-      interpreter->names[id].pop_back();
+    Lazy* result = interpreter.Allocate<Lazy>(
+        Run(interpreter, std::span(interpreter.stack).template last<n>()));
+    interpreter.stack.resize(interpreter.stack.size() - n + 1);
+    interpreter.stack.back() = result;
+  }
+  virtual Value* Run(Interpreter& interpreter, std::span<Lazy*, n> args) = 0;
+};
+
+struct Add : public NativeFunction<2> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    Value* l = args[0]->Get(interpreter);
+    Value* r = args[1]->Get(interpreter);
+    return interpreter.Allocate<Int64>(l->AsInt64() + r->AsInt64());
+  }
+};
+
+struct NativeClosure : public Lambda {
+  NativeClosure(NativeFunctionBase* f, std::vector<Lazy*> b = {})
+      : f(f), bound(std::move(b)) {
+    if ((int)bound.size() >= f->arity) {
+      throw std::logic_error("creating (over)saturated native closure");
     }
   }
-  Type GetType() const override { return Type::kLambda; }
+  void MarkChildren() override {
+    f->Mark();
+    for (const auto& b : bound) b->Mark();
+  }
+  void Enter(Interpreter& interpreter) override {
+    const int required = f->arity - bound.size();
+    if (required > 1) {
+      std::vector<Lazy*> newly_bound = bound;
+      newly_bound.push_back(interpreter.stack.back());
+      interpreter.stack.back() = interpreter.Allocate<Lazy>(
+          interpreter.Allocate<NativeClosure>(f, std::move(newly_bound)));
+    } else {
+      interpreter.stack.insert(interpreter.stack.end() - 1, bound.begin(),
+                               bound.end());
+      f->Enter(interpreter);
+    }
+  }
+  NativeFunctionBase* f;
+  std::vector<Lazy*> bound;
+};
+
+struct UserLambda final : public Lambda {
+  UserLambda(Interpreter& interpreter, const core::Lambda& definition)
+      : definition(definition), captures(interpreter.Resolve(definition)) {}
+  void Enter(Interpreter& interpreter) override {
+    for (const auto& [id, value] : captures) {
+      interpreter.names[id].push_back(value);
+    }
+    Lazy* v = interpreter.stack.back();
+    interpreter.names[definition.parameter].push_back(v);
+    interpreter.stack.back() = interpreter.LazyEvaluate(definition.result);
+    interpreter.names[definition.parameter].pop_back();
+    for (const auto& [id, value] : captures) {
+      interpreter.names[id].pop_back();
+    }
+  }
   void MarkChildren() override {
     for (const auto& [id, value] : captures) value->Mark();
   }
-  Interpreter* interpreter;
   const core::Lambda& definition;
   std::map<core::Identifier, Lazy*> captures;
 };
@@ -318,7 +378,7 @@ struct Apply final : public Thunk {
   }
   Value* Run(Interpreter& interpreter) override {
     interpreter.stack.push_back(x);
-    f->Get(interpreter)->Enter();
+    f->Get(interpreter)->Enter(interpreter);
     Value* v = interpreter.stack.back()->Get(interpreter);
     interpreter.stack.pop_back();
     return v;
@@ -386,9 +446,9 @@ const ConsData& Value::AsCons() const {
   return static_cast<const Cons*>(this)->data;
 }
 
-void Value::Enter() {
+void Value::Enter(Interpreter& interpreter) {
   if (GetType() != Type::kLambda) throw std::runtime_error("not a lambda");
-  return static_cast<Lambda*>(this)->Enter();
+  return static_cast<Lambda*>(this)->Enter(interpreter);
 }
 
 template <std::derived_from<Node> T, typename... Args>
@@ -631,6 +691,10 @@ Lazy* Interpreter::LazyEvaluate(const core::Builtin& x) {
       return Allocate<Lazy>(Allocate<Bool>(true));
     case core::Builtin::kFalse:
       return Allocate<Lazy>(Allocate<Bool>(false));
+    case core::Builtin::kNil:
+      return Allocate<Lazy>(Allocate<Nil>());
+    case core::Builtin::kAdd:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Add>()));
     default:
       throw std::runtime_error("unimplemented");
   }
@@ -662,7 +726,7 @@ Lazy* Interpreter::LazyEvaluate(const core::Apply& x) {
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Lambda& x) {
-  return Allocate<Lazy>(Allocate<Lambda>(this, x));
+  return Allocate<Lazy>(Allocate<UserLambda>(*this, x));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Let& x) {
