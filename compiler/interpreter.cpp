@@ -24,22 +24,23 @@ struct Node {
 };
 
 struct Value;
+struct Interpreter;
 
 struct Thunk : Node {
-  virtual Value* Run() = 0;
+  virtual Value* Run(Interpreter& interpreter) = 0;
 };
 
 class Lazy final : public Node {
  public:
   Lazy(Value* value) : has_value(true), value(value) {}
   Lazy(Thunk* thunk) : has_value(false), thunk(thunk) {}
-  Value* Get() {
+  Value* Get(Interpreter& interpreter) {
     if (!has_value) {
       // Evaluation of the thunk relies on evaluating itself: the expression
       // diverges without reaching weak head normal form.
       if (computing) throw std::runtime_error("divergence");
       computing = true;
-      value = thunk->Run();
+      value = thunk->Run(interpreter);
       computing = false;
     }
     return value;
@@ -178,27 +179,26 @@ struct Nil final : public Value {
 };
 
 struct Let final : public Thunk {
-  Let(Interpreter* interpreter, const core::Let& definition)
-      : interpreter(interpreter),
-        definition(definition),
-        captures(interpreter->Resolve(definition)) {}
+  Let(Interpreter& interpreter, const core::Let& definition)
+      : definition(definition),
+        captures(interpreter.Resolve(definition)) {}
   void MarkChildren() override {
     for (const auto& [id, value] : captures) value->Mark();
   }
-  Value* Run() override {
+  Value* Run(Interpreter& interpreter) override {
     for (const auto& [id, value] : captures) {
-      interpreter->names[id].push_back(value);
+      interpreter.names[id].push_back(value);
     }
-    interpreter->names[definition.binding.name].push_back(
-        interpreter->LazyEvaluate(definition.binding.result));
-    Value* result = interpreter->LazyEvaluate(definition.result)->Get();
-    interpreter->names[definition.binding.name].pop_back();
+    interpreter.names[definition.binding.name].push_back(
+        interpreter.LazyEvaluate(definition.binding.result));
+    Value* result =
+        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
+    interpreter.names[definition.binding.name].pop_back();
     for (const auto& [id, value] : captures) {
-      interpreter->names[id].pop_back();
+      interpreter.names[id].pop_back();
     }
     return result;
   }
-  Interpreter* interpreter;
   const core::Let& definition;
   std::map<core::Identifier, Lazy*> captures;
 };
@@ -206,29 +206,28 @@ struct Let final : public Thunk {
 struct Error final : public Thunk {
   Error(std::string message) : message(std::move(message)) {}
   void MarkChildren() override {}
-  Value* Run() override {
+  Value* Run(Interpreter&) override {
     throw std::runtime_error(message);
   }
   std::string message;
 };
 
 struct LetRecursive final : public Thunk {
-  LetRecursive(Interpreter* interpreter, const core::LetRecursive& definition)
-      : interpreter(interpreter),
-        definition(definition),
-        captures(interpreter->Resolve(definition)) {}
+  LetRecursive(Interpreter& interpreter, const core::LetRecursive& definition)
+      : definition(definition),
+        captures(interpreter.Resolve(definition)) {}
   void MarkChildren() override {
     for (const auto& [id, value] : captures) value->Mark();
   }
-  Value* Run() override {
+  Value* Run(Interpreter& interpreter) override {
     for (const auto& [id, value] : captures) {
-      interpreter->names[id].push_back(value);
+      interpreter.names[id].push_back(value);
     }
     std::vector<Lazy*> holes;
     for (const auto& [id, value] : definition.bindings) {
-      Lazy* l = interpreter->Allocate<Lazy>(
-          interpreter->Allocate<Error>("this should never be executed"));
-      interpreter->names[id].push_back(l);
+      Lazy* l = interpreter.Allocate<Lazy>(
+          interpreter.Allocate<Error>("this should never be executed"));
+      interpreter.names[id].push_back(l);
       holes.push_back(l);
     }
     for (int i = 0, n = definition.bindings.size(); i < n; i++) {
@@ -241,23 +240,23 @@ struct LetRecursive final : public Thunk {
       //     overwrite the hole with the thunk for the actual value. This may
       //     refer to the value itself internally, at which point it will
       //     evaluate as the newly-assigned value.
-      Lazy* value = interpreter->LazyEvaluate(definition.bindings[i].result);
+      Lazy* value = interpreter.LazyEvaluate(definition.bindings[i].result);
       if (holes[i] == value) {
-        *holes[i] = Lazy(interpreter->Allocate<Error>("divergence"));
+        *holes[i] = Lazy(interpreter.Allocate<Error>("divergence"));
       } else {
         *holes[i] = *value;
       }
     }
-    Value* result = interpreter->LazyEvaluate(definition.result)->Get();
+    Value* result =
+        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
     for (const auto& [id, value] : definition.bindings) {
-      interpreter->names[id].pop_back();
+      interpreter.names[id].pop_back();
     }
     for (const auto& [id, value] : captures) {
-      interpreter->names[id].pop_back();
+      interpreter.names[id].pop_back();
     }
     return result;
   }
-  Interpreter* interpreter;
   const core::LetRecursive& definition;
   std::map<core::Identifier, Lazy*> captures;
 };
@@ -288,56 +287,50 @@ struct Lambda final : public Value {
 };
 
 struct Apply final : public Thunk {
-  Apply(Interpreter* interpreter, Lazy* f, Lazy* x)
-      : interpreter(interpreter), f(f), x(x) {}
+  Apply(Lazy* f, Lazy* x) : f(f), x(x) {}
   void MarkChildren() override {
     f->Mark();
     x->Mark();
   }
-  Value* Run() override {
-    interpreter->stack.push_back(x);
-    f->Get()->Enter();
-    Value* v = interpreter->stack.back()->Get();
-    interpreter->stack.pop_back();
+  Value* Run(Interpreter& interpreter) override {
+    interpreter.stack.push_back(x);
+    f->Get(interpreter)->Enter();
+    Value* v = interpreter.stack.back()->Get(interpreter);
+    interpreter.stack.pop_back();
     return v;
   }
-  Interpreter* interpreter;
   Lazy* f;
   Lazy* x;
 };
 
 struct Read final : public Thunk {
-  Read(Interpreter* interpreter) : interpreter(interpreter) {}
   void MarkChildren() override {}
-  Value* Run() override {
+  Value* Run(Interpreter& interpreter) override {
     char c;
     if (std::cin.get(c)) {
-      return interpreter->Allocate<Cons>(
-          interpreter->Allocate<Lazy>(interpreter->Allocate<Char>(c)),
-          interpreter->Allocate<Lazy>(this));
+      return interpreter.Allocate<Cons>(
+          interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(c)),
+          interpreter.Allocate<Lazy>(this));
     } else {
-      return interpreter->Allocate<Nil>();
+      return interpreter.Allocate<Nil>();
     }
   }
-  Interpreter* interpreter;
 };
 
 struct StringTail final : public Thunk {
-  StringTail(Interpreter* interpreter, std::string_view tail)
-      : interpreter(interpreter), tail(tail) {}
-  Value* Run() override {
+  StringTail(std::string_view tail) : tail(tail) {}
+  Value* Run(Interpreter& interpreter) override {
     if (tail.empty()) {
-      return interpreter->Allocate<Nil>();
+      return interpreter.Allocate<Nil>();
     } else {
       const char head = tail.front();
       tail.remove_prefix(1);
-      return interpreter->Allocate<Cons>(
-          interpreter->Allocate<Lazy>(interpreter->Allocate<Char>(head)),
-          interpreter->Allocate<Lazy>(this));
+      return interpreter.Allocate<Cons>(
+          interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(head)),
+          interpreter.Allocate<Lazy>(this));
     }
   }
   void MarkChildren() override {}
-  Interpreter* interpreter;
   std::string_view tail;
 };
 
@@ -627,7 +620,7 @@ Lazy* Interpreter::LazyEvaluate(const core::Character& x) {
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::String& x) {
-  return Allocate<Lazy>(Allocate<StringTail>(this, x.value));
+  return Allocate<Lazy>(Allocate<StringTail>(x.value));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Cons& x) {
@@ -636,8 +629,7 @@ Lazy* Interpreter::LazyEvaluate(const core::Cons& x) {
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Apply& x) {
-  return Allocate<Lazy>(
-      Allocate<Apply>(this, LazyEvaluate(x.f), LazyEvaluate(x.x)));
+  return Allocate<Lazy>(Allocate<Apply>(LazyEvaluate(x.f), LazyEvaluate(x.x)));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Lambda& x) {
@@ -645,11 +637,11 @@ Lazy* Interpreter::LazyEvaluate(const core::Lambda& x) {
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Let& x) {
-  return Allocate<Lazy>(Allocate<Let>(this, x));
+  return Allocate<Lazy>(Allocate<Let>(*this, x));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::LetRecursive& x) {
-  return Allocate<Lazy>(Allocate<LetRecursive>(this, x));
+  return Allocate<Lazy>(Allocate<LetRecursive>(*this, x));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Case& x) {
@@ -670,14 +662,14 @@ Lazy* Interpreter::LazyEvaluate(const core::Expression& x) {
 }
 
 void Interpreter::Run(const core::Expression& program) {
-  Lazy* output = Allocate<Lazy>(Allocate<Apply>(
-      this, LazyEvaluate(program), Allocate<Lazy>(Allocate<Read>(this))));
+  Lazy* output = Allocate<Lazy>(
+      Allocate<Apply>(LazyEvaluate(program), Allocate<Lazy>(Allocate<Read>())));
   try {
     while (true) {
-      Value* v = output->Get();
+      Value* v = output->Get(*this);
       if (v->GetType() == Value::Type::kCons) {
         auto& cons = v->AsCons();
-        std::cout << cons.head->Get()->AsChar();
+        std::cout << cons.head->Get(*this)->AsChar();
         output = cons.tail;
       } else if (v->GetType() == Value::Type::kNil) {
         break;
