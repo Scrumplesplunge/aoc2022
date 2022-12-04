@@ -110,6 +110,17 @@ struct Interpreter {
   Lazy* LazyEvaluate(const core::Case& x);
   Lazy* LazyEvaluate(const core::Expression& x);
 
+  Value* TryAlternative(Value*, const core::Case::Alternative& x);
+  Value* TryAlternative(Value*, const core::Builtin&,
+                        const core::Expression& x);
+  Value* TryAlternative(Value*, const core::Identifier&,
+                        const core::Expression& x);
+  Value* TryAlternative(Value*, const core::Decons&, const core::Expression& x);
+  Value* TryAlternative(Value*, const core::Integer&,
+                        const core::Expression& x);
+  Value* TryAlternative(Value*, const core::Character&,
+                        const core::Expression& x);
+
   void Run(const core::Expression& program);
 
   std::vector<std::unique_ptr<Node>> heap;
@@ -260,6 +271,20 @@ struct LetRecursive final : public Closure {
   const core::LetRecursive& definition;
 };
 
+struct Case final : public Closure {
+  Case(Interpreter& interpreter, const core::Case& definition)
+      : Closure(interpreter.Resolve(definition)), definition(definition) {}
+  Value* RunBody(Interpreter& interpreter) override {
+    std::vector<Lazy*> values;
+    Value* v = interpreter.LazyEvaluate(definition.value)->Get(interpreter);
+    for (const auto& alternative : definition.alternatives) {
+      if (Value* r = interpreter.TryAlternative(v, alternative)) return r;
+    }
+    throw std::runtime_error("non-exhaustative case");
+  }
+  const core::Case& definition;
+};
+
 struct Lambda final : public Value {
   Lambda(Interpreter* interpreter, const core::Lambda& definition)
       : interpreter(interpreter), definition(definition),
@@ -339,6 +364,11 @@ void Lazy::MarkChildren() {
   } else {
     thunk->Mark();
   }
+}
+
+bool Value::AsBool() const {
+  if (GetType() != Type::kBool) throw std::runtime_error("not a bool");
+  return static_cast<const Bool*>(this)->value;
 }
 
 std::int64_t Value::AsInt64() const {
@@ -644,20 +674,80 @@ Lazy* Interpreter::LazyEvaluate(const core::LetRecursive& x) {
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Case& x) {
-  throw std::runtime_error("not implemented");
-  // std::vector<Lazy*> values;
-  // Value* v = LazyEvaluate(x.value)->Get();
-  // for (const auto& alternative : x.alternatives) {
-  //   if (MatchesPattern(v, alternative.pattern)) {
-  //     return StrictEvaluate(alternative.value);
-  //   }
-  // }
-  // throw std::runtime_error("non-exhaustative case");
+  return Allocate<Lazy>(Allocate<Case>(*this, x));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Expression& x) {
   return std::visit([this](const auto& x) { return LazyEvaluate(x); },
                     x->value);
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Case::Alternative& x) {
+  return std::visit(
+      [&](const auto& pattern) { return TryAlternative(v, pattern, x.value); },
+      x.pattern->value);
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Builtin& b,
+                                   const core::Expression& x) {
+  switch (b) {
+    case core::Builtin::kNil:
+      if (v->GetType() == Value::Type::kNil) {
+        return LazyEvaluate(x)->Get(*this);
+      } else {
+        return nullptr;
+      }
+    case core::Builtin::kTrue:
+      if (v->GetType() == Value::Type::kBool && v->AsBool()) {
+        return LazyEvaluate(x)->Get(*this);
+      } else {
+        return nullptr;
+      }
+    case core::Builtin::kFalse:
+      if (v->GetType() == Value::Type::kBool && !v->AsBool()) {
+        return LazyEvaluate(x)->Get(*this);
+      } else {
+        return nullptr;
+      }
+    default:
+      throw std::runtime_error("unsupported pattern");
+  }
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Identifier& i,
+                                   const core::Expression& x) {
+  names[i].push_back(Allocate<Lazy>(v));
+  Lazy* l = LazyEvaluate(x);
+  names[i].pop_back();
+  return l->Get(*this);
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Decons& d,
+                                   const core::Expression& x) {
+  if (v->GetType() != Value::Type::kCons) return nullptr;
+  const auto& cons = v->AsCons();
+  names[d.head].push_back(cons.head);
+  names[d.tail].push_back(cons.tail);
+  Lazy* l = LazyEvaluate(x);
+  names[d.head].pop_back();
+  names[d.tail].pop_back();
+  return l->Get(*this);
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Integer& i,
+                                   const core::Expression& x) {
+  if (v->GetType() != Value::Type::kInt64 || v->AsInt64() != i.value) {
+    return nullptr;
+  }
+  return LazyEvaluate(x)->Get(*this);
+}
+
+Value* Interpreter::TryAlternative(Value* v, const core::Character& c,
+                                   const core::Expression& x) {
+  if (v->GetType() != Value::Type::kChar || v->AsChar() != c.value) {
+    return nullptr;
+  }
+  return LazyEvaluate(x)->Get(*this);
 }
 
 void Interpreter::Run(const core::Expression& program) {
