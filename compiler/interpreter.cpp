@@ -178,29 +178,39 @@ struct Nil final : public Value {
   void MarkChildren() override {}
 };
 
-struct Let final : public Thunk {
-  Let(Interpreter& interpreter, const core::Let& definition)
-      : definition(definition),
-        captures(interpreter.Resolve(definition)) {}
+struct Closure : public Thunk {
+  Closure(std::map<core::Identifier, Lazy*> captures)
+      : captures(std::move(captures)) {}
   void MarkChildren() override {
     for (const auto& [id, value] : captures) value->Mark();
   }
-  Value* Run(Interpreter& interpreter) override {
+  virtual Value* RunBody(Interpreter&) = 0;
+  Value* Run(Interpreter& interpreter) final {
     for (const auto& [id, value] : captures) {
       interpreter.names[id].push_back(value);
     }
-    interpreter.names[definition.binding.name].push_back(
-        interpreter.LazyEvaluate(definition.binding.result));
-    Value* result =
-        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
-    interpreter.names[definition.binding.name].pop_back();
+    Value* result = RunBody(interpreter);
     for (const auto& [id, value] : captures) {
       interpreter.names[id].pop_back();
     }
     return result;
   }
-  const core::Let& definition;
   std::map<core::Identifier, Lazy*> captures;
+};
+
+struct Let final : public Closure {
+  Let(Interpreter& interpreter, const core::Let& definition)
+      : Closure(interpreter.Resolve(definition)),
+        definition(definition) {}
+  Value* RunBody(Interpreter& interpreter) override {
+    interpreter.names[definition.binding.name].push_back(
+        interpreter.LazyEvaluate(definition.binding.result));
+    Value* result =
+        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
+    interpreter.names[definition.binding.name].pop_back();
+    return result;
+  }
+  const core::Let& definition;
 };
 
 struct Error final : public Thunk {
@@ -212,17 +222,10 @@ struct Error final : public Thunk {
   std::string message;
 };
 
-struct LetRecursive final : public Thunk {
+struct LetRecursive final : public Closure {
   LetRecursive(Interpreter& interpreter, const core::LetRecursive& definition)
-      : definition(definition),
-        captures(interpreter.Resolve(definition)) {}
-  void MarkChildren() override {
-    for (const auto& [id, value] : captures) value->Mark();
-  }
-  Value* Run(Interpreter& interpreter) override {
-    for (const auto& [id, value] : captures) {
-      interpreter.names[id].push_back(value);
-    }
+      : Closure(interpreter.Resolve(definition)), definition(definition) {}
+  Value* RunBody(Interpreter& interpreter) override {
     std::vector<Lazy*> holes;
     for (const auto& [id, value] : definition.bindings) {
       Lazy* l = interpreter.Allocate<Lazy>(
@@ -252,13 +255,9 @@ struct LetRecursive final : public Thunk {
     for (const auto& [id, value] : definition.bindings) {
       interpreter.names[id].pop_back();
     }
-    for (const auto& [id, value] : captures) {
-      interpreter.names[id].pop_back();
-    }
     return result;
   }
   const core::LetRecursive& definition;
-  std::map<core::Identifier, Lazy*> captures;
 };
 
 struct Lambda final : public Value {
