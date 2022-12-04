@@ -2,6 +2,7 @@
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "checker.hpp"
+#include "interpreter.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -21,12 +22,7 @@ int main(int argc, char* argv[]) {
   }
   const std::string source = GetContents(argv[1]);
   const std::vector<aoc2022::Token> tokens = aoc2022::Lex(source);
-  for (const auto& token : tokens) {
-    std::cout << token << '\n';
-  }
-  std::cout << '\n';
   const aoc2022::syntax::Program program = aoc2022::Parse(tokens);
-  std::cout << program << "\n\n";
   const aoc2022::core::Expression ir = aoc2022::Check(program);
-  std::cout << ir << '\n';
+  aoc2022::Run(ir);
 }

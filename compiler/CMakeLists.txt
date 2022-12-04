@@ -30,5 +30,7 @@ target_link_libraries(core token variant)
 add_library(checker checker.cpp checker.hpp)
 target_link_libraries(checker syntax core)
 
+add_library(interpreter interpreter.cpp interpreter.hpp)
+
 add_executable(compiler compiler.cpp)
-target_link_libraries(compiler lexer parser checker debug_output)
+target_link_libraries(compiler lexer parser checker interpreter debug_output)
