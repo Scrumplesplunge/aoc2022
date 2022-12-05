@@ -208,24 +208,18 @@ std::ostream& operator<<(std::ostream& output, const Pattern& x) {
 
 std::ostream& operator<<(std::ostream& output, const Builtin& x) {
   switch (x) {
+    case Builtin::kNil:
+      return output << "Builtin::kNil";
     case Builtin::kTrue:
       return output << "Builtin::kTrue";
     case Builtin::kFalse:
       return output << "Builtin::kFalse";
-    case Builtin::kMap:
-      return output << "Builtin::kMap";
     case Builtin::kReadInt:
       return output << "Builtin::kReadInt";
-    case Builtin::kSplit:
-      return output << "Builtin::kSplit";
     case Builtin::kShowInt:
       return output << "Builtin::kShowInt";
-    case Builtin::kNil:
-      return output << "Builtin::kNil";
     case Builtin::kAdd:
       return output << "Builtin::kAdd";
-    case Builtin::kLessThan:
-      return output << "Builtin::kLessThan";
   }
   std::abort();
 }
