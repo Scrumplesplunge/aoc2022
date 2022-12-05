@@ -41,6 +41,7 @@ class Lazy final : public Node {
       if (computing) throw std::runtime_error("divergence");
       computing = true;
       value = thunk->Run(interpreter);
+      has_value = true;
       computing = false;
     }
     return value;
