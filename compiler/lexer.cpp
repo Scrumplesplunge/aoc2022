@@ -157,6 +157,9 @@ struct Lexer {
       } else if (c == ']') {
         tokens.emplace_back(location, Symbol::kCloseSquare);
         Advance(1);
+      } else if (c == ',') {
+        tokens.emplace_back(location, Symbol::kComma);
+        Advance(1);
       } else if (c == '\'') {
         LexCharacter();
       } else if (c == '\"') {

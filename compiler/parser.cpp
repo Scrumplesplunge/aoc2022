@@ -9,9 +9,8 @@ namespace aoc2022 {
 namespace {
 
 bool IsTerm(const Token& token) {
-  if (auto* s = std::get_if<Symbol>(&token.value);
-      s && *s == Symbol::kOpenParen) {
-    return true;
+  if (auto* s = std::get_if<Symbol>(&token.value)) {
+    return *s == Symbol::kOpenParen || *s == Symbol::kOpenSquare;
   }
   const Token::Type type = Token::Type(token.value.index());
   return type == Token::kIdentifier || type == Token::kInteger ||
