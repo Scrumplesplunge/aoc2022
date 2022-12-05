@@ -8,7 +8,7 @@
 
 namespace aoc2022 {
 
-std::vector<Token> Lex(std::string_view source);
+std::vector<Token> Lex(const Source& source);
 
 }  // namespace aoc2022
 

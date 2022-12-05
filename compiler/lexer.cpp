@@ -61,7 +61,7 @@ struct Lexer {
   template <typename... Args>
   std::runtime_error Error(const Args&... args) {
     std::ostringstream message;
-    message << "input:" << line << ":" << column << ": ";
+    message << source.filename << ":" << line << ":" << column << ": ";
     (message << ... << args);
     return std::runtime_error(message.str());
   }
@@ -108,7 +108,7 @@ struct Lexer {
   }
 
   void HandleIndent() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     const char* const first = cursor.data();
     const char* const end = first + cursor.size();
     const char* i = first;
@@ -139,7 +139,7 @@ struct Lexer {
   void Lex() {
     while (true) {
       SkipToNext();
-      const Location location(line, column);
+      const Location location(&source, line, column);
       if (cursor.empty()) {
         tokens.emplace_back(location, Space::kEnd);
         return;
@@ -194,7 +194,7 @@ struct Lexer {
   }
 
   void LexCharacter() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     if (!ConsumePrefix("'")) throw Error("bad character literal");
     if (cursor.size() < 2) throw Error("unterminated character literal");
     if (cursor[0] == '\'') throw Error("empty character literal");
@@ -220,7 +220,7 @@ struct Lexer {
   }
 
   void LexString() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     if (cursor.empty() || cursor[0] != '"') {
       throw Error("expected string literal");
     }
@@ -253,7 +253,7 @@ struct Lexer {
   }
 
   void LexInteger() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     const std::string_view word = PeekWord();
     std::int64_t value = 0;
     for (char c : word) {
@@ -265,7 +265,7 @@ struct Lexer {
   }
 
   void LexIdentifierOrKeyword() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     const std::string_view word = PeekWord();
     if (word.empty() || !IsIdentifierStart(word[0])) {
       throw Error("bad identifier");
@@ -280,7 +280,7 @@ struct Lexer {
   }
 
   void LexOperator() {
-    const Location location(line, column);
+    const Location location(&source, line, column);
     const std::string_view op = PeekSequence<IsOperator>();
     const auto i = operators.find(op);
     if (i == operators.end()) throw Error("bad operator");
@@ -290,17 +290,18 @@ struct Lexer {
 
   int line = 1;
   int column = 1;
+  const Source& source;
   std::string_view cursor;
   std::vector<IndentationLevel> indentation_levels = {{
-      .location = {.line = 1, .column = 1}, .amount = 0}};
+      .location = {.source = &source, .line = 1, .column = 1}, .amount = 0}};
   std::vector<Token> tokens = {};
 };
 
 }  // namespace
 
-std::vector<Token> Lex(std::string_view source) {
-  assert(!source.empty() && source.back() == '\n');
-  Lexer lexer = {.cursor = source};
+std::vector<Token> Lex(const Source& source) {
+  assert(!source.contents.empty() && source.contents.back() == '\n');
+  Lexer lexer = {.source = source, .cursor = source.contents};
   lexer.Lex();
   return lexer.tokens;
 }

@@ -15,7 +15,9 @@ std::string GetContents(const char* filename) {
   return contents;
 }
 
-constexpr char kPrelude[] = R"(
+constexpr aoc2022::Source kPrelude = {
+  .filename = "prelude",
+  .contents = R"(
 map f xs =
   case xs of
     [] -> []
@@ -35,7 +37,8 @@ lines' first xs =
       case x of
         '\n' -> reverse first : lines xs'
         x -> lines' (x : first) xs'
-)";
+)",
+};
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {
@@ -47,7 +50,8 @@ int main(int argc, char* argv[]) {
   const std::vector<aoc2022::Token> prelude_tokens = aoc2022::Lex(kPrelude);
   const aoc2022::syntax::Program prelude = aoc2022::Parse(prelude_tokens);
 
-  const std::string source = GetContents(argv[1]);
+  const std::string contents = GetContents(argv[1]);
+  const aoc2022::Source source = {.filename = argv[1], .contents = contents};
   const std::vector<aoc2022::Token> tokens = aoc2022::Lex(source);
   aoc2022::syntax::Program program = aoc2022::Parse(tokens);
   program.definitions.insert(program.definitions.end(),

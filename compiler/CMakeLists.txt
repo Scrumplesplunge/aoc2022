@@ -6,7 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_compile_options(-Wall -Wextra -Wno-unused-parameter -pedantic -g3)
+add_compile_options(-Wall -Wextra -Wno-unused-parameter -pedantic -g3 -fsanitize=undefined)
+add_link_options(-fsanitize=undefined)
 
 add_library(token token.cpp token.hpp)
 

@@ -9,6 +9,9 @@
 namespace aoc2022 {
 namespace {
 
+constexpr Source kBuiltin = {.filename = "builtin", .contents = "\n"};
+constexpr Location kBuiltinLocation = {&kBuiltin, 1, 1};
+
 template <typename... Args>
 std::string MakeMessage(Location location, const Args&... args) {
   std::ostringstream message;
@@ -250,7 +253,7 @@ struct Checker {
     }
 
     const Name* main = TryLookup("main");
-    if (!main) throw Error({1, 1}, "no definition for main");
+    if (!main) throw Error(program.end, "no definition for main");
     return core::LetRecursive(std::move(bindings), main->AsExpression());
   }
 
@@ -263,11 +266,10 @@ struct Checker {
   int next_id = 0;
   std::map<core::Identifier, Location> locations;
   std::vector<Name> names = {
-      Name{.location = {1, 1},
+      Name{.location = kBuiltinLocation,
            .name = "readInt",
            .value = core::Builtin::kReadInt},
-      Name{.location = {1, 1}, .name = "split", .value = core::Builtin::kSplit},
-      Name{.location = {1, 1},
+      Name{.location = kBuiltinLocation,
            .name = "showInt",
            .value = core::Builtin::kShowInt},
   };

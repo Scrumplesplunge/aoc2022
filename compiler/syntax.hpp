@@ -135,6 +135,7 @@ struct Definition {
 struct Program {
   bool operator==(const Program&) const = default;
   std::vector<Definition> definitions;
+  Location end;
 };
 
 }  // namespace aoc2022::syntax

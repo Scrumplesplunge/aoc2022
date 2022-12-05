@@ -22,7 +22,8 @@ struct Parser {
   std::runtime_error Error(const Args&... args) {
     const Location location = cursor[0].location;
     std::ostringstream message;
-    message << "input:" << location.line << ":" << location.column << ": ";
+    message << location.source->filename << ":" << location.line << ":"
+            << location.column << ": ";
     (message << ... << args);
     return std::runtime_error(message.str());
   }
@@ -31,7 +32,10 @@ struct Parser {
     syntax::Program program;
     while (true) {
       while (Consume(Space::kNewline)) {}
-      if (Consume(Space::kEnd)) break;
+      if (NextIs(Space::kEnd)) {
+        program.end = cursor[0].location;
+        break;
+      }
       program.definitions.push_back(ParseDefinition());
     }
     return program;

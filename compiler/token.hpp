@@ -7,8 +7,14 @@
 
 namespace aoc2022 {
 
+struct Source {
+  std::string_view filename;
+  std::string_view contents;
+};
+
 struct Location {
   bool operator==(const Location&) const = default;
+  const Source* source;
   int line, column;
 };
 
