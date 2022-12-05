@@ -1,5 +1,8 @@
 #include "interpreter.hpp"
 
+#include "debug_output.hpp"
+
+#include <charconv>
 #include <map>
 #include <set>
 #include <span>
@@ -8,6 +11,12 @@
 
 namespace aoc2022 {
 namespace {
+
+std::string StrCat(const auto&... args) {
+  std::ostringstream output;
+  (output << ... << args);
+  return output.str();
+}
 
 struct Node {
   virtual ~Node() = default;
@@ -318,6 +327,40 @@ struct Add : public NativeFunction<2> {
     Value* l = args[0]->Get(interpreter);
     Value* r = args[1]->Get(interpreter);
     return interpreter.Allocate<Int64>(l->AsInt64() + r->AsInt64());
+  }
+};
+
+struct ShowInt : public NativeFunction<1> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 1> args) override {
+    const std::int64_t value = args[0]->Get(interpreter)->AsInt64();
+    std::string text = std::to_string(value);
+    Value* result = interpreter.Allocate<Nil>();
+    for (int i = text.size() - 1; i >= 0; i--) {
+      result = interpreter.Allocate<Cons>(
+          interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(text[i])),
+          interpreter.Allocate<Lazy>(result));
+    }
+    return result;
+  }
+};
+
+struct ReadInt : public NativeFunction<1> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 1> args) override {
+    std::string text;
+    Lazy* list = args[0];
+    while (true) {
+      Value* v = list->Get(interpreter);
+      if (v->GetType() == Value::Type::kNil) break;
+      auto& cons = v->AsCons();
+      Value* head = cons.head->Get(interpreter);
+      text.push_back(head->AsChar());
+      list = cons.tail;
+    }
+    std::int64_t value;
+    auto [p, error] = std::from_chars(text.data(), text.data() + text.size(),
+                                      value);
+    if (error != std::errc()) throw std::runtime_error("bad int in string");
+    return interpreter.Allocate<Int64>(value);
   }
 };
 
@@ -696,8 +739,12 @@ Lazy* Interpreter::LazyEvaluate(const core::Builtin& x) {
       return Allocate<Lazy>(Allocate<Nil>());
     case core::Builtin::kAdd:
       return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Add>()));
+    case core::Builtin::kShowInt:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ShowInt>()));
+    case core::Builtin::kReadInt:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ReadInt>()));
     default:
-      throw std::runtime_error("unimplemented");
+      throw std::runtime_error(StrCat("unimplemented builtin: ", x));
   }
 }
 

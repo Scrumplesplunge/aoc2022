@@ -24,15 +24,13 @@ class Pattern {
 };
 
 enum class Builtin {
+  kNil,
   kTrue,
   kFalse,
-  kMap,
   kReadInt,
-  kSplit,
   kShowInt,
   kAdd,
   kLessThan,
-  kNil,
 };
 
 struct Decons {

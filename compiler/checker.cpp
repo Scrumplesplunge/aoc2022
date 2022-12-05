@@ -263,7 +263,6 @@ struct Checker {
   int next_id = 0;
   std::map<core::Identifier, Location> locations;
   std::vector<Name> names = {
-      Name{.location = {1, 1}, .name = "map", .value = core::Builtin::kMap},
       Name{.location = {1, 1},
            .name = "readInt",
            .value = core::Builtin::kReadInt},
