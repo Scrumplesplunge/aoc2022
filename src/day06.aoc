@@ -1,0 +1,15 @@
+-- window :: Int -> [a] -> [[a]]
+window n xs = take (length xs - n + 1) (map (take n) (tails xs))
+
+-- find :: Int -> String -> Int
+find n = find' n n . window n
+find' i n xs =
+  case xs of
+    (x : xs') ->
+      if length x == length (nub x) then
+        i
+      else
+        find' (i + 1) n xs'
+
+main input =
+  showInt (find 4 input) ++ "\n" ++ showInt (find 14 input) ++ "\n"
