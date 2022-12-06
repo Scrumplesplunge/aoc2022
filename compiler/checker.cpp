@@ -79,13 +79,6 @@ struct Checker {
     return result;
   }
 
-  core::Expression Check(const syntax::LessThan& x) {
-    core::Expression a = Check(x.a);
-    core::Expression b = Check(x.b);
-    return core::Apply(core::Apply(core::Builtin::kLessThan, std::move(a)),
-                       std::move(b));
-  }
-
   core::Expression Check(const syntax::Add& x) {
     core::Expression a = Check(x.a);
     core::Expression b = Check(x.b);
@@ -93,10 +86,116 @@ struct Checker {
                        std::move(b));
   }
 
+  core::Expression Check(const syntax::Subtract& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kSubtract, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::Multiply& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kMultiply, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::Divide& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kDivide, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::Modulo& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kModulo, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::LessThan& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kLessThan, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::LessOrEqual& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    // a <= b -> not (b < a)
+    return core::Apply(
+        core::Builtin::kNot,
+        core::Apply(core::Apply(core::Builtin::kLessThan, std::move(b)),
+                    std::move(a)));
+  }
+
+  core::Expression Check(const syntax::GreaterThan& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    // a > b -> b < a
+    return core::Apply(core::Apply(core::Builtin::kLessThan, std::move(b)),
+                       std::move(a));
+  }
+
+  core::Expression Check(const syntax::GreaterOrEqual& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    // a >= b -> not (a < b)
+    return core::Apply(
+        core::Builtin::kNot,
+        core::Apply(core::Apply(core::Builtin::kLessThan, std::move(a)),
+                    std::move(b)));
+  }
+
+  core::Expression Check(const syntax::Equal& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kEqual, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::NotEqual& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    // a != b -> not (a == b)
+    return core::Apply(
+        core::Builtin::kNot,
+        core::Apply(core::Apply(core::Builtin::kAdd, std::move(a)),
+                    std::move(b)));
+  }
+
+  core::Expression Check(const syntax::And& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kAnd, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::Or& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kOr, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::Not& x) {
+    core::Expression inner = Check(x.inner);
+    return core::Apply(core::Builtin::kNot, std::move(inner));
+  }
+
   core::Expression Check(const syntax::Cons& x) {
     core::Expression head = Check(x.head);
     core::Expression tail = Check(x.tail);
     return core::Cons(std::move(head), std::move(tail));
+  }
+
+  core::Expression Check(const syntax::Concat& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kConcat, std::move(a)),
+                       std::move(b));
   }
 
   core::Expression Check(const syntax::Apply& a) {
@@ -197,7 +296,7 @@ struct Checker {
   core::Expression Check(const syntax::If& x) {
     core::Expression condition = Check(x.condition),
                      then_branch = Check(x.then_branch),
-                     else_branch = Check(x.then_branch);
+                     else_branch = Check(x.else_branch);
     return core::Case(
         std::move(condition),
         {core::Case::Alternative(core::Builtin::kTrue, std::move(then_branch)),

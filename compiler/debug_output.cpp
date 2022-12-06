@@ -57,28 +57,52 @@ std::ostream& operator<<(std::ostream& output, Keyword x) {
 
 std::ostream& operator<<(std::ostream& output, Symbol x) {
   switch (x) {
-    case Symbol::kOpenParen:
-      return output << "Symbol::kOpenParen";
-    case Symbol::kCloseParen:
-      return output << "Symbol::kCloseParen";
-    case Symbol::kOpenSquare:
-      return output << "Symbol::kOpenSquare";
-    case Symbol::kCloseSquare:
-      return output << "Symbol::kCloseSquare";
-    case Symbol::kComma:
-      return output << "Symbol::kComma";
-    case Symbol::kEquals:
-      return output << "Symbol::kEquals";
-    case Symbol::kDot:
-      return output << "Symbol::kDot";
-    case Symbol::kColon:
-      return output << "Symbol::kColon";
-    case Symbol::kPlus:
-      return output << "Symbol::kPlus";
+    case Symbol::kAdd:
+      return output << "Symbol::kAdd";
+    case Symbol::kAnd:
+      return output << "Symbol::kAnd";
     case Symbol::kArrow:
       return output << "Symbol::kArrow";
-    case Symbol::kLess:
-      return output << "Symbol::kLess";
+    case Symbol::kCloseParen:
+      return output << "Symbol::kCloseParen";
+    case Symbol::kCloseSquare:
+      return output << "Symbol::kCloseSquare";
+    case Symbol::kColon:
+      return output << "Symbol::kColon";
+    case Symbol::kComma:
+      return output << "Symbol::kComma";
+    case Symbol::kCompareEqual:
+      return output << "Symbol::kCompareEqual";
+    case Symbol::kCompareGreater:
+      return output << "Symbol::kCompareGreater";
+    case Symbol::kCompareGreaterOrEqual:
+      return output << "Symbol::kCompareGreaterOrEqual";
+    case Symbol::kCompareLess:
+      return output << "Symbol::kCompareLess";
+    case Symbol::kCompareLessOrEqual:
+      return output << "Symbol::kCompareLessOrEqual";
+    case Symbol::kCompareNotEqual:
+      return output << "Symbol::kCompareNotEqual";
+    case Symbol::kConcat:
+      return output << "Symbol::kConcat";
+    case Symbol::kDivide:
+      return output << "Symbol::kDivide";
+    case Symbol::kDot:
+      return output << "Symbol::kDot";
+    case Symbol::kEquals:
+      return output << "Symbol::kEquals";
+    case Symbol::kModulo:
+      return output << "Symbol::kModulo";
+    case Symbol::kMultiply:
+      return output << "Symbol::kMultiply";
+    case Symbol::kOpenParen:
+      return output << "Symbol::kOpenParen";
+    case Symbol::kOpenSquare:
+      return output << "Symbol::kOpenSquare";
+    case Symbol::kOr:
+      return output << "Symbol::kOr";
+    case Symbol::kSubtract:
+      return output << "Symbol::kSubtract";
   }
   std::abort();
 }
@@ -119,16 +143,68 @@ std::ostream& operator<<(std::ostream& output, const List& x) {
   }
 }
 
-std::ostream& operator<<(std::ostream& output, const LessThan& x) {
-  return output << "LessThan(" << x.a << ", " << x.b << ")";
-}
-
 std::ostream& operator<<(std::ostream& output, const Add& x) {
   return output << "Add(" << x.a << ", " << x.b << ")";
 }
 
+std::ostream& operator<<(std::ostream& output, const Subtract& x) {
+  return output << "Subtract(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Multiply& x) {
+  return output << "Multiply(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Divide& x) {
+  return output << "Divide(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Modulo& x) {
+  return output << "Modulo(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const LessThan& x) {
+  return output << "LessThan(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const LessOrEqual& x) {
+  return output << "LessOrEqual(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const GreaterThan& x) {
+  return output << "GreaterThan(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const GreaterOrEqual& x) {
+  return output << "GreaterOrEqual(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Equal& x) {
+  return output << "Equal(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const NotEqual& x) {
+  return output << "NotEqual(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const And& x) {
+  return output << "And(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Or& x) {
+  return output << "Or(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Not& x) {
+  return output << "Not(" << x.inner << ")";
+}
+
 std::ostream& operator<<(std::ostream& output, const Cons& x) {
   return output << "Cons(" << x.head << ", " << x.tail << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Concat& x) {
+  return output << "Concat(" << x.a << ", " << x.b << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Apply& x) {
@@ -208,18 +284,38 @@ std::ostream& operator<<(std::ostream& output, const Pattern& x) {
 
 std::ostream& operator<<(std::ostream& output, const Builtin& x) {
   switch (x) {
-    case Builtin::kNil:
-      return output << "Builtin::kNil";
-    case Builtin::kTrue:
-      return output << "Builtin::kTrue";
+    case Builtin::kAdd:
+      return output << "Builtin::kAdd";
+    case Builtin::kAnd:
+      return output << "Builtin::kAnd";
+    case Builtin::kConcat:
+      return output << "Builtin::kConcat";
+    case Builtin::kDivide:
+      return output << "Builtin::kDivide";
+    case Builtin::kEqual:
+      return output << "Builtin::kEqual";
     case Builtin::kFalse:
       return output << "Builtin::kFalse";
+    case Builtin::kLessThan:
+      return output << "Builtin::kLessThan";
+    case Builtin::kModulo:
+      return output << "Builtin::kModulo";
+    case Builtin::kMultiply:
+      return output << "Builtin::kMultiply";
+    case Builtin::kNil:
+      return output << "Builtin::kNil";
+    case Builtin::kNot:
+      return output << "Builtin::kNot";
+    case Builtin::kOr:
+      return output << "Builtin::kOr";
     case Builtin::kReadInt:
       return output << "Builtin::kReadInt";
     case Builtin::kShowInt:
       return output << "Builtin::kShowInt";
-    case Builtin::kAdd:
-      return output << "Builtin::kAdd";
+    case Builtin::kSubtract:
+      return output << "Builtin::kSubtract";
+    case Builtin::kTrue:
+      return output << "Builtin::kTrue";
   }
   std::abort();
 }

@@ -29,7 +29,7 @@ struct Node {
 
   virtual void MarkChildren() = 0;
 
-  bool reachable;
+  bool reachable = false;
 };
 
 struct Value;
@@ -163,6 +163,24 @@ struct Value : public Node {
   void Enter(Interpreter&);
 };
 
+const char* Name(Value::Type t) {
+  switch (t) {
+    case Value::Type::kBool:
+      return "bool";
+    case Value::Type::kInt64:
+      return "int64";
+    case Value::Type::kChar:
+      return "char";
+    case Value::Type::kCons:
+      return "cons";
+    case Value::Type::kNil:
+      return "nil";
+    case Value::Type::kLambda:
+      return "lambda";
+  }
+  std::abort();
+}
+
 struct Bool final : public Value {
   Bool(bool value) : value(value) {}
   Type GetType() const override { return Type::kBool; }
@@ -290,7 +308,9 @@ struct Case final : public Closure {
     for (const auto& alternative : definition.alternatives) {
       if (Value* r = interpreter.TryAlternative(v, alternative)) return r;
     }
-    throw std::runtime_error("non-exhaustative case");
+    throw std::runtime_error(StrCat("non-exhaustative case: nothing to match ",
+                                    Name(v->GetType()),
+                                    ". core: ", definition));
   }
   const core::Case& definition;
 };
@@ -314,19 +334,98 @@ struct NativeFunction : public NativeFunctionBase {
     if (interpreter.stack.size() < n) {
       throw std::logic_error("invoking native function with too few arguments");
     }
-    Lazy* result = interpreter.Allocate<Lazy>(
-        Run(interpreter, std::span(interpreter.stack).template last<n>()));
+    std::array<Lazy*, n> args;
+    const int m = interpreter.stack.size();
+    for (int i = 0; i < n; i++) {
+      args[i] = interpreter.stack[m - n + i];
+    }
     interpreter.stack.resize(interpreter.stack.size() - n + 1);
+    Lazy* result = interpreter.Allocate<Lazy>(Run(interpreter, args));
     interpreter.stack.back() = result;
   }
   virtual Value* Run(Interpreter& interpreter, std::span<Lazy*, n> args) = 0;
 };
 
-struct Add : public NativeFunction<2> {
+struct Not : public NativeFunction<1> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 1> args) override {
+    return interpreter.Allocate<Bool>(!args[0]->Get(interpreter)->AsBool());
+  }
+};
+
+template <auto F>
+struct BinaryOperatorInt64 : public NativeFunction<2> {
   Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
     Value* l = args[0]->Get(interpreter);
     Value* r = args[1]->Get(interpreter);
-    return interpreter.Allocate<Int64>(l->AsInt64() + r->AsInt64());
+    return interpreter.Allocate<Int64>(F(l->AsInt64(), r->AsInt64()));
+  }
+};
+
+using Add = BinaryOperatorInt64<[](auto l, auto r) { return l + r; }>;
+using Subtract = BinaryOperatorInt64<[](auto l, auto r) { return l - r; }>;
+using Multiply = BinaryOperatorInt64<[](auto l, auto r) { return l * r; }>;
+using Divide = BinaryOperatorInt64<[](auto l, auto r) { return l / r; }>;
+using Modulo = BinaryOperatorInt64<[](auto l, auto r) { return l % r; }>;
+
+template <auto F>
+struct BinaryOperatorBool : public NativeFunction<2> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    Value* l = args[0]->Get(interpreter);
+    Value* r = args[1]->Get(interpreter);
+    return interpreter.Allocate<Bool>(F(l->AsBool(), r->AsBool()));
+  }
+};
+
+using And = BinaryOperatorInt64<[](bool l, bool r) { return l && r; }>;
+using Or = BinaryOperatorInt64<[](bool l, bool r) { return l || r; }>;
+
+struct Equal : public NativeFunction<2> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    Value* l = args[0]->Get(interpreter);
+    Value* r = args[1]->Get(interpreter);
+    if (l->GetType() == r->GetType()) {
+      switch (l->GetType()) {
+        case Value::Type::kBool:
+          return interpreter.Allocate<Bool>(l->AsBool() == r->AsBool());
+        case Value::Type::kChar:
+          return interpreter.Allocate<Char>(l->AsChar() == r->AsChar());
+        case Value::Type::kInt64:
+          return interpreter.Allocate<Bool>(l->AsInt64() == r->AsInt64());
+        default:
+          throw std::runtime_error(
+              StrCat("unsupported (==) comparison for ", Name(l->GetType())));
+      }
+    } else if ((l->GetType() == Value::Type::kCons &&
+                r->GetType() == Value::Type::kNil) ||
+               (l->GetType() == Value::Type::kNil &&
+                r->GetType() == Value::Type::kCons)) {
+      return interpreter.Allocate<Bool>(false);
+    } else {
+      throw std::runtime_error(StrCat("unsupported (==) comparison between ",
+                                      Name(l->GetType()), " and ",
+                                      Name(r->GetType())));
+    }
+  }
+};
+
+struct LessThan : public NativeFunction<2> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    Value* l = args[0]->Get(interpreter);
+    Value* r = args[1]->Get(interpreter);
+    if (l->GetType() != r->GetType()) {
+      throw std::runtime_error(StrCat("unsupported (<) comparison between ",
+                                      Name(l->GetType()), " and ",
+                                      Name(r->GetType())));
+    }
+    switch (l->GetType()) {
+      case Value::Type::kChar:
+        return interpreter.Allocate<Char>(l->AsChar() < r->AsChar());
+      case Value::Type::kInt64:
+        return interpreter.Allocate<Bool>(l->AsInt64() < r->AsInt64());
+      default:
+        throw std::runtime_error(
+            StrCat("unsupported (<) comparison for ", Name(l->GetType())));
+    }
   }
 };
 
@@ -460,6 +559,36 @@ struct StringTail final : public Thunk {
   }
   void MarkChildren() override {}
   std::string_view tail;
+};
+
+struct ConcatThunk final : public Thunk {
+  ConcatThunk(Lazy* l, Lazy* r) : l(l), r(r) {}
+  Value* Run(Interpreter& interpreter) override {
+    Value* v = l->Get(interpreter);
+    if (v->GetType() == Value::Type::kCons) {
+      const auto& cons = v->AsCons();
+      l = cons.tail;
+      return interpreter.Allocate<Cons>(cons.head,
+                                        interpreter.Allocate<Lazy>(this));
+    } else if (v->GetType() == Value::Type::kNil) {
+      return r->Get(interpreter);
+    } else {
+      throw std::runtime_error("concat argument is not a list");
+    }
+  }
+  void MarkChildren() override {
+    l->Mark();
+    r->Mark();
+  }
+  Lazy* l;
+  Lazy* r;
+};
+
+struct Concat : public NativeFunction<2> {
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    return interpreter.Allocate<ConcatThunk>(args[0], args[1])
+        ->Run(interpreter);
+  }
 };
 
 void Lazy::MarkChildren() {
@@ -731,21 +860,40 @@ std::set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
 
 Lazy* Interpreter::LazyEvaluate(const core::Builtin& x) {
   switch (x) {
-    case core::Builtin::kTrue:
-      return Allocate<Lazy>(Allocate<Bool>(true));
-    case core::Builtin::kFalse:
-      return Allocate<Lazy>(Allocate<Bool>(false));
-    case core::Builtin::kNil:
-      return Allocate<Lazy>(Allocate<Nil>());
     case core::Builtin::kAdd:
       return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Add>()));
-    case core::Builtin::kShowInt:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ShowInt>()));
+    case core::Builtin::kAnd:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<And>()));
+    case core::Builtin::kConcat:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Concat>()));
+    case core::Builtin::kDivide:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Divide>()));
+    case core::Builtin::kEqual:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Equal>()));
+    case core::Builtin::kFalse:
+      return Allocate<Lazy>(Allocate<Bool>(false));
+    case core::Builtin::kLessThan:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<LessThan>()));
+    case core::Builtin::kModulo:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Modulo>()));
+    case core::Builtin::kMultiply:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Multiply>()));
+    case core::Builtin::kNil:
+      return Allocate<Lazy>(Allocate<Nil>());
+    case core::Builtin::kNot:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Not>()));
+    case core::Builtin::kOr:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Or>()));
     case core::Builtin::kReadInt:
       return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ReadInt>()));
-    default:
-      throw std::runtime_error(StrCat("unimplemented builtin: ", x));
+    case core::Builtin::kShowInt:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ShowInt>()));
+    case core::Builtin::kSubtract:
+      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Subtract>()));
+    case core::Builtin::kTrue:
+      return Allocate<Lazy>(Allocate<Bool>(true));
   }
+  throw std::runtime_error(StrCat("unimplemented builtin: ", x));
 }
 
 Lazy* Interpreter::LazyEvaluate(const core::Identifier& identifier) {
@@ -865,7 +1013,6 @@ Value* Interpreter::TryAlternative(Value* v, const core::Character& c,
 void Interpreter::Run(const core::Expression& program) {
   Lazy* output = Allocate<Lazy>(
       Allocate<Apply>(LazyEvaluate(program), Allocate<Lazy>(Allocate<Read>())));
-  try {
     while (true) {
       Value* v = output->Get(*this);
       if (v->GetType() == Value::Type::kCons) {
@@ -878,9 +1025,6 @@ void Interpreter::Run(const core::Expression& program) {
         throw std::runtime_error("type error in output");
       }
     }
-  } catch (const std::exception& error) {
-    std::cerr << "error: " << error.what() << '\n';
-  }
 }
 
 }  // namespace

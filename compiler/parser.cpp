@@ -153,30 +153,89 @@ struct Parser {
     return result;
   }
 
-  syntax::Expression ParseSum() {
+  syntax::Expression ParseProduct() {
     syntax::Expression result = ParseApply();
     while (true) {
       const Location location = cursor[0].location;
-      if (Consume(Symbol::kPlus)) {
-        result = syntax::Add(location, std::move(result), ParseApply());
+      if (Consume(Symbol::kMultiply)) {
+        result = syntax::Multiply(location, std::move(result), ParseApply());
+      } else if (Consume(Symbol::kDivide)) {
+        result = syntax::Divide(location, std::move(result), ParseApply());
+      } else if (Consume(Symbol::kModulo)) {
+        result = syntax::Modulo(location, std::move(result), ParseApply());
       } else {
         return result;
       }
     }
   }
 
-  syntax::Expression ParseCompare() {
+  syntax::Expression ParseSum() {
+    syntax::Expression result = ParseProduct();
+    while (true) {
+      const Location location = cursor[0].location;
+      if (Consume(Symbol::kAdd)) {
+        result = syntax::Add(location, std::move(result), ParseProduct());
+      } else if (Consume(Symbol::kSubtract)) {
+        result = syntax::Subtract(location, std::move(result), ParseProduct());
+      } else {
+        return result;
+      }
+    }
+  }
+
+  syntax::Expression ParseConcat() {
     syntax::Expression result = ParseSum();
     const Location location = cursor[0].location;
-    if (Consume(Symbol::kLess)) {
-      return syntax::LessThan(location, std::move(result), ParseSum());
+    if (!Consume(Symbol::kConcat)) return result;
+    return syntax::Concat(location, std::move(result), ParseConcat());
+  }
+
+  syntax::Expression ParseCompare() {
+    syntax::Expression result = ParseConcat();
+    const Location location = cursor[0].location;
+    if (Consume(Symbol::kCompareEqual)) {
+      return syntax::Equal(location, std::move(result), ParseConcat());
+    } else if (Consume(Symbol::kCompareNotEqual)) {
+      return syntax::NotEqual(location, std::move(result), ParseConcat());
+    } else if (Consume(Symbol::kCompareLess)) {
+      return syntax::LessThan(location, std::move(result), ParseConcat());
+    } else if (Consume(Symbol::kCompareLessOrEqual)) {
+      return syntax::LessOrEqual(location, std::move(result), ParseConcat());
+    } else if (Consume(Symbol::kCompareGreater)) {
+      return syntax::GreaterThan(location, std::move(result), ParseConcat());
+    } else if (Consume(Symbol::kCompareGreaterOrEqual)) {
+      return syntax::GreaterOrEqual(location, std::move(result), ParseConcat());
     } else {
       return result;
     }
   }
 
-  syntax::Expression ParseCompose() {
+  syntax::Expression ParseConjunction() {
     syntax::Expression result = ParseCompare();
+    while (true) {
+      const Location location = cursor[0].location;
+      if (Consume(Symbol::kAnd)) {
+        result = syntax::And(location, std::move(result), ParseCompare());
+      } else {
+        return result;
+      }
+    }
+  }
+
+  syntax::Expression ParseDisjunction() {
+    syntax::Expression result = ParseConjunction();
+    while (true) {
+      const Location location = cursor[0].location;
+      if (Consume(Symbol::kOr)) {
+        result = syntax::And(location, std::move(result), ParseConjunction());
+      } else {
+        return result;
+      }
+    }
+  }
+
+  syntax::Expression ParseCompose() {
+    syntax::Expression result = ParseDisjunction();
     const Location location = cursor[0].location;
     if (!Consume(Symbol::kDot)) return result;
     return syntax::Compose(location, std::move(result), ParseCompose());

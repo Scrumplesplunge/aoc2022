@@ -54,22 +54,100 @@ struct List {
   std::vector<Expression> elements;
 };
 
-struct LessThan {
-  bool operator==(const LessThan&) const = default;
-  Location location;
-  Expression a, b;
-};
-
 struct Add {
   bool operator==(const Add&) const = default;
   Location location;
   Expression a, b;
 };
 
+struct Subtract {
+  bool operator==(const Subtract&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Multiply {
+  bool operator==(const Multiply&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Divide {
+  bool operator==(const Divide&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Modulo {
+  bool operator==(const Modulo&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct LessThan {
+  bool operator==(const LessThan&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct LessOrEqual {
+  bool operator==(const LessOrEqual&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct GreaterThan {
+  bool operator==(const GreaterThan&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct GreaterOrEqual {
+  bool operator==(const GreaterOrEqual&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Equal {
+  bool operator==(const Equal&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct NotEqual {
+  bool operator==(const NotEqual&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct And {
+  bool operator==(const And&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Or {
+  bool operator==(const Or&) const = default;
+  Location location;
+  Expression a, b;
+};
+
+struct Not {
+  bool operator==(const Not&) const = default;
+  Location location;
+  Expression inner;
+};
+
 struct Cons {
   bool operator==(const Cons&) const = default;
   Location location;
   Expression head, tail;
+};
+
+struct Concat {
+  bool operator==(const Concat&) const = default;
+  Location location;
+  Expression a, b;
 };
 
 struct Apply {
@@ -105,8 +183,10 @@ struct If {
 
 struct ExpressionVariant {
   bool operator==(const ExpressionVariant&) const = default;
-  std::variant<Identifier, Integer, Character, String, List, LessThan, Add,
-               Cons, Apply, Compose, Case, If>
+  std::variant<Identifier, Integer, Character, String, List, Add, Subtract,
+               Multiply, Divide, Modulo, LessThan, LessOrEqual, GreaterThan,
+               GreaterOrEqual, Equal, NotEqual, And, Or, Not, Cons, Concat,
+               Apply, Compose, Case, If>
       value;
 };
 

@@ -19,12 +19,26 @@ const std::map<std::string_view, Keyword, std::less<>> keywords = {
 };
 
 const std::map<std::string_view, Symbol, std::less<>> operators = {
-  {"=", Symbol::kEquals},
-  {".", Symbol::kDot},
-  {":", Symbol::kColon},
-  {"+", Symbol::kPlus},
+  {"+", Symbol::kAdd},
+  {"&&", Symbol::kAnd},
   {"->", Symbol::kArrow},
-  {"<", Symbol::kLess},
+  {"||", Symbol::kOr},
+  {":", Symbol::kColon},
+  {",", Symbol::kComma},
+  {"==", Symbol::kCompareEqual},
+  {">", Symbol::kCompareGreater},
+  {">=", Symbol::kCompareGreaterOrEqual},
+  {"<", Symbol::kCompareLess},
+  {"<=", Symbol::kCompareLessOrEqual},
+  {"!=", Symbol::kCompareNotEqual},
+  {"++", Symbol::kConcat},
+  {"/", Symbol::kDivide},
+  {".", Symbol::kDot},
+  {"=", Symbol::kEquals},
+  {"%", Symbol::kModulo},
+  {"*", Symbol::kMultiply},
+  {"||", Symbol::kOr},
+  {"-", Symbol::kSubtract},
 };
 
 bool IsDigit(char c) { return '0' <= c && c <= '9'; }
@@ -40,13 +54,8 @@ bool IsIdentifierStart(char c) { return IsLower(c); }
 
 bool IsOperator(char c) {
   switch (c) {
-    case '=':
-    case '.':
-    case ':':
-    case '+':
-    case '-':
-    case '>':
-    case '<':
+    case '!': case '%': case '&': case '*': case '+': case ',': case '-':
+    case '.': case '/': case ':': case '<': case '=': case '>': case '|':
       return true;
   }
   return false;
