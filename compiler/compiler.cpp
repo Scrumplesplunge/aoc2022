@@ -18,6 +18,31 @@ std::string GetContents(const char* filename) {
 constexpr aoc2022::Source kPrelude = {
   .filename = "prelude",
   .contents = R"(
+length xs = length' 0 xs
+length' n xs =
+  case xs of
+    [] -> n
+    (x : xs') -> length' (n + 1) xs'
+
+delete x ys =
+  case ys of
+    [] -> []
+    (y : ys') ->
+      if x == y then
+        ys'
+      else
+        y : delete x ys'
+
+nub xs =
+  case xs of
+    [] -> []
+    (x : xs') -> x : delete x (nub xs')
+
+tails xs =
+  case xs of
+    [] -> [[]]
+    (x : xs') -> xs : tails xs'
+
 map f xs =
   case xs of
     [] -> []
