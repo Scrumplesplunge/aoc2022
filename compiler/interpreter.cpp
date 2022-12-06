@@ -388,7 +388,7 @@ struct Equal : public NativeFunction<2> {
         case Value::Type::kBool:
           return interpreter.Allocate<Bool>(l->AsBool() == r->AsBool());
         case Value::Type::kChar:
-          return interpreter.Allocate<Char>(l->AsChar() == r->AsChar());
+          return interpreter.Allocate<Bool>(l->AsChar() == r->AsChar());
         case Value::Type::kInt64:
           return interpreter.Allocate<Bool>(l->AsInt64() == r->AsInt64());
         default:
