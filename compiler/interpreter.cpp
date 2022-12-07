@@ -380,17 +380,22 @@ using And = BinaryOperatorInt64<[](bool l, bool r) { return l && r; }>;
 using Or = BinaryOperatorInt64<[](bool l, bool r) { return l || r; }>;
 
 struct Equal : public NativeFunction<2> {
-  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
-    Value* l = args[0]->Get(interpreter);
-    Value* r = args[1]->Get(interpreter);
+  bool Run(Interpreter& interpreter, Lazy* lazy_l, Lazy* lazy_r) {
+    Value* l = lazy_l->Get(interpreter);
+    Value* r = lazy_r->Get(interpreter);
     if (l->GetType() == r->GetType()) {
       switch (l->GetType()) {
+        case Value::Type::kNil:
+          return true;
         case Value::Type::kBool:
-          return interpreter.Allocate<Bool>(l->AsBool() == r->AsBool());
+          return l->AsBool() == r->AsBool();
         case Value::Type::kChar:
-          return interpreter.Allocate<Bool>(l->AsChar() == r->AsChar());
+          return l->AsChar() == r->AsChar();
         case Value::Type::kInt64:
-          return interpreter.Allocate<Bool>(l->AsInt64() == r->AsInt64());
+          return l->AsInt64() == r->AsInt64();
+        case Value::Type::kCons:
+          return Run(interpreter, l->AsCons().head, r->AsCons().head) &&
+                 Run(interpreter, l->AsCons().tail, r->AsCons().tail);
         default:
           throw std::runtime_error(
               StrCat("unsupported (==) comparison for ", Name(l->GetType())));
@@ -399,12 +404,15 @@ struct Equal : public NativeFunction<2> {
                 r->GetType() == Value::Type::kNil) ||
                (l->GetType() == Value::Type::kNil &&
                 r->GetType() == Value::Type::kCons)) {
-      return interpreter.Allocate<Bool>(false);
+      return false;
     } else {
       throw std::runtime_error(StrCat("unsupported (==) comparison between ",
                                       Name(l->GetType()), " and ",
                                       Name(r->GetType())));
     }
+  }
+  Value* Run(Interpreter& interpreter, std::span<Lazy*, 2> args) override {
+    return interpreter.Allocate<Bool>(Run(interpreter, args[0], args[1]));
   }
 };
 
