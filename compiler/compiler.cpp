@@ -156,6 +156,11 @@ sortBy lt xs =
 lt a b = a < b
 
 sort = sortBy lt
+
+min a b = if a < b then a else b
+max a b = if a < b then b else a
+minimum xs = foldl min (head xs) (tail xs)
+maximum xs = foldl max (head xs) (tail xs)
 )",
 };
 

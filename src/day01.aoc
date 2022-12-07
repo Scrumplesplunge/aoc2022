@@ -1,10 +1,10 @@
 -- Assuming these builtins:
---   foldr :: (a -> b -> b) -> b -> [a] -> b
 --   lines :: String -> [String]
---   sort :: Ord a => [a] -> [a]
+--   maximum :: Ord a -> [a] -> a
 --   readInt :: String -> Int
 --   reverse :: [a] -> [a]
 --   showInt :: Int -> String
+--   sort :: Ord a => [a] -> [a]
 --   sum :: [Int] -> Int
 --   take :: Int -> [a] -> [a]
 
@@ -21,7 +21,7 @@ parseInput' n xs =
 max a b = if a < b then b else a
 
 -- part1 :: [Int] -> Int
-part1 = foldr max 0
+part1 = maximum
 
 -- part2 :: [Int] -> Int
 part2 = sum . take 3 . reverse . sort
