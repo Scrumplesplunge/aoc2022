@@ -18,6 +18,19 @@ std::string GetContents(const char* filename) {
 constexpr aoc2022::Source kPrelude = {
   .filename = "prelude",
   .contents = R"(
+true = (1 == 1)
+false = (1 == 0)
+
+head xs = case xs of
+  (x : xs') -> x
+tail xs = case xs of
+  (x : xs') -> xs'
+
+null xs =
+  case xs of
+    [] -> true
+    xs -> false
+
 length xs = length' 0 xs
 length' n xs =
   case xs of
@@ -48,6 +61,11 @@ map f xs =
     [] -> []
     (x : xs') -> f x : map f xs'
 
+filter p xs =
+  case xs of
+    [] -> []
+    (x : xs') -> if p x then x : filter p xs' else filter p xs'
+
 reverse = reverse' []
 reverse' sx xs =
   case xs of
@@ -68,14 +86,36 @@ take n xs =
       else
         x : take (n - 1) xs'
 
-lines = lines' []
-lines' first xs =
+drop n xs =
   case xs of
-    [] -> reverse first
+    [] -> []
     (x : xs') ->
-      case x of
-        '\n' -> reverse first : lines xs'
-        x -> lines' (x : first) xs'
+      if n == 0 then
+        xs'
+      else
+        drop (n - 1) xs'
+
+split c = split' c []
+split' c first xs =
+  case xs of
+    [] -> if null first then [] else [reverse first]
+    (x : xs') ->
+      if x == c then
+        reverse first : split c xs'
+      else
+        split' c (x : first) xs'
+
+lines = split '\n'
+words = split ' '
+
+intersperse j xs =
+  case xs of
+    [] -> []
+    (x : xs') -> x : intersperse' j xs'
+intersperse' j xs =
+  case xs of
+    [] -> []
+    (x : xs') -> j : x : intersperse' j xs'
 
 foldr f e xs =
   case xs of
@@ -98,17 +138,24 @@ partition' p ls rs xs =
   case xs of
     [] -> [ls, rs]
     (x : xs') ->
-      if x < p then
+      if p x then
         partition' p (x : ls) rs xs'
       else
         partition' p ls (x : rs) xs'
-quicksort xs =
+
+flip f a b = f b a
+
+sortBy lt xs =
   case xs of
     [] -> []
     (x : xs') ->
-      case partition x xs' of
+      case partition (flip lt x) xs' of
         (ls : tmp) -> case tmp of
-          (rs : tmp2) -> quicksort ls ++ [x] ++ quicksort rs
+          (rs : tmp2) -> sortBy lt ls ++ [x] ++ sortBy lt rs
+
+lt a b = a < b
+
+sort = sortBy lt
 )",
 };
 

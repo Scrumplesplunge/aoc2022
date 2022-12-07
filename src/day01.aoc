@@ -1,7 +1,7 @@
 -- Assuming these builtins:
 --   foldr :: (a -> b -> b) -> b -> [a] -> b
 --   lines :: String -> [String]
---   quicksort :: Ord a => [a] -> [a]
+--   sort :: Ord a => [a] -> [a]
 --   readInt :: String -> Int
 --   reverse :: [a] -> [a]
 --   showInt :: Int -> String
@@ -24,7 +24,7 @@ max a b = if a < b then b else a
 part1 = foldr max 0
 
 -- part2 :: [Int] -> Int
-part2 = sum . take 3 . reverse . quicksort
+part2 = sum . take 3 . reverse . sort
 
 solve input =
   showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
