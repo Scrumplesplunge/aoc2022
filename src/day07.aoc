@@ -1,0 +1,90 @@
+-- I didn't implement tuples or algebraic data types yet, so I need to fake it
+-- with cons:
+--   type Size = Int
+--   type Path = [String]              (with most nested directory first)
+--   data Dir = Dir Size [Dir] String  approximated by (Int : [Dir] : String)
+--   data File = File Path Size        approximated by (Path : Int)
+
+-- cd :: String -> [Dir] -> [Dir]
+cd dest path =
+  if dest == "/" then
+    [(0 : [] : "")]
+  else if dest == ".." then
+    case path of
+      (dir : dirs) ->
+        case dirs of
+          (parent : dirs') ->
+            (addDir dir parent) : dirs'
+  else
+    (0 : [] : dest) : path
+
+-- size :: Dir -> Int
+size dir = case dir of
+  (size : rest) -> size
+
+-- addFile :: Int -> Dir -> Dir
+addFile n dir = case dir of
+  (size : rest) -> (size + n : rest)
+
+-- addDir :: Dir -> Dir -> Dir
+addDir child parent =
+  case parent of
+    (totalSize : rest) ->
+      case rest of
+        (children : name) ->
+          (totalSize + size child : (child : children) : name)
+
+-- exit :: [Dir] -> Dir
+exit stack = exit' (head stack) (tail stack)
+exit' dir stack =
+  case stack of
+    [] -> dir
+    (s : ss) -> exit' (addDir dir s) ss
+
+-- parseLines :: [String] -> [Dir] -> Dir
+parseLines lines stack =
+  case lines of
+    [] -> exit stack
+    (line : lines') ->
+      case words line of
+        (w : ws) ->
+          if w == "$" then
+            runCommand lines' ws stack
+          else if w == "dir" then
+            parseLines lines' stack
+          else
+            case stack of
+              (dir : dirs) ->
+                parseLines lines' (addFile (readInt w) dir : dirs)
+
+-- runCommand :: [String] -> [String] -> [Dir] -> Dir
+runCommand lines command stack =
+  case command of
+    (op : args) ->
+      if op == "cd" then
+        case args of
+          (dest : nil) -> parseLines lines (cd dest stack)
+      else
+        parseLines lines stack
+
+-- parseInput :: String -> [File]
+parseInput input = parseLines (lines input) [(0 : [] : "?")]
+
+-- dirs :: Dir -> [Dir]
+dirs root =
+  case root of
+    (size : rest) ->
+      case rest of
+        (children : name) ->
+          root : concat (map dirs children)
+
+-- dirSizes :: Dir -> [Int]
+dirSizes = sort . map size . dirs
+
+minDeletion input = size input - 40000000
+atLeast x y = x <= y
+
+part1 = sum . filter (flip lt 100000) . dirSizes
+part2 input = head (filter (atLeast (minDeletion input)) (dirSizes input))
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parseInput
