@@ -1,80 +1,58 @@
--- I didn't implement tuples or algebraic data types yet, so I need to fake it
--- with cons:
---   data Dir = Dir Int [Dir]   approximated by (Int : [Dir])
+-- type Stack = [Int]
+-- type Size = Int
 
--- cd :: String -> [Dir] -> [Dir]
-cd dest stack =
+-- cd :: [String] -> String -> Stack -> [Size]
+cd lines dest stack =
   if dest == "/" then
-    [(0 : [])]
+    parseLines lines [0]
   else if dest == ".." then
-    case stack of
-      (dir : dirs) ->
-        case dirs of
-          (parent : dirs') ->
-            (addDir dir parent) : dirs'
+    head stack : parseLines lines (pop stack)
   else
-    (0 : []) : stack
+    parseLines lines (0 : stack)
 
--- size :: Dir -> Int
-size dir = case dir of
-  (size : children) -> size
+-- pop :: Stack -> Stack
+pop stack = case stack of
+  (s : ss) -> add s ss
 
--- addFile :: Int -> Dir -> Dir
-addFile n dir = case dir of
-  (size : children) -> (size + n : children)
+-- add :: Size -> Stack -> Stack
+add n stack = case stack of
+  (size : sizes') -> size + n : sizes'
 
--- addDir :: Dir -> Dir -> Dir
-addDir child parent =
-  case parent of
-    (totalSize : children) -> (totalSize + size child : (child : children))
-
--- exit :: [Dir] -> Dir
+-- exit :: Stack -> [Size]
 exit stack = exit' (head stack) (tail stack)
-exit' dir stack =
-  case stack of
-    [] -> dir
-    (s : ss) -> exit' (addDir dir s) ss
+exit' s ss = case ss of
+  [] -> [s]
+  (s' : ss') -> s : exit' (s + s') ss'
 
--- parseLines :: [String] -> [Dir] -> Dir
-parseLines lines stack =
-  case lines of
-    [] -> exit stack
-    (line : lines') ->
-      case words line of
-        (w : ws) ->
-          if w == "$" then
-            runCommand lines' ws stack
-          else if w == "dir" then
-            parseLines lines' stack
-          else
-            case stack of
-              (dir : dirs) ->
-                parseLines lines' (addFile (readInt w) dir : dirs)
+-- parseLines :: [String] -> Stack -> [Size]
+parseLines lines stack = case lines of
+  [] -> exit stack
+  (line : lines') ->
+    case words line of
+      (w : ws) ->
+        if w == "$" then
+          runCommand lines' ws stack
+        else if w == "dir" then
+          parseLines lines' stack
+        else
+          parseLines lines' (add (readInt w) stack)
 
--- runCommand :: [String] -> [String] -> [Dir] -> Dir
+-- runCommand :: [String] -> [String] -> Stack -> [Size]
 runCommand lines command stack =
   case command of
     (op : args) ->
       if op == "cd" then
         case args of
-          (dest : nil) -> parseLines lines (cd dest stack)
+          (dest : nil) -> cd lines dest stack
       else
         parseLines lines stack
 
--- parseInput :: String -> [File]
-parseInput input = parseLines (lines input) [(0 : [])]
+-- parseInput :: String -> [Size]
+parseInput input = parseLines (lines input) [0]
 
--- dirs :: Dir -> [Dir]
-dirs root = case root of
-  (size : children) -> root : concat (map dirs children)
+bigEnough input x = x >= maximum input - 40000000
 
--- dirSizes :: Dir -> [Int]
-dirSizes = sort . map size . dirs
-
-minDeletion input = size input - 40000000
-atLeast x y = x <= y
-
-part1 = sum . filter (flip lt 100000) . dirSizes
-part2 input = head (filter (atLeast (minDeletion input)) (dirSizes input))
+part1 input = sum     (filter (flip lt 100000)  input)
+part2 input = minimum (filter (bigEnough input) input)
 solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
 main = solve . parseInput
