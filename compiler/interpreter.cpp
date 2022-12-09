@@ -127,6 +127,51 @@ class Lazy final : public Node {
   };
 };
 
+template <typename K, typename V>
+class flat_map {
+ public:
+  V& operator[](const K& k) {
+    if (contents_.empty()) {
+      auto& entry = contents_.emplace_back(k, V());
+      return entry.second;
+    }
+    const int i = Index(k);
+    if (contents_[i].first == k) return contents_[i].second;
+    auto entry = contents_.emplace(contents_.begin() + i, k, V());
+    return entry->second;
+  }
+
+  const V& at(const K& k) const {
+    if (contents_.empty()) throw std::runtime_error("not found");
+    const int i = Index(k);
+    if (contents_[i].first != k) throw std::runtime_error("not found");
+    return contents_[i].second;
+  }
+
+  bool empty() const { return contents_.empty(); }
+  auto size() const { return contents_.size(); }
+  auto begin() { return contents_.begin(); }
+  auto end() { return contents_.end(); }
+  auto begin() const { return contents_.begin(); }
+  auto end() const { return contents_.end(); }
+
+ private:
+  int Index(const K& k) const {
+    int a = 0, b = contents_.size();
+    while (b - a > 1) {
+      const int i = (a + b) / 2;
+      if (k < contents_[i].first) {
+        b = i;
+      } else {
+        a = i;
+      }
+    }
+    return a;
+  }
+
+  std::vector<std::pair<K, V>> contents_;
+};
+
 struct Interpreter {
   template <std::derived_from<Node> T, typename... Args>
   requires std::constructible_from<T, Args...>
@@ -157,33 +202,31 @@ struct Interpreter {
 
   void CollectGarbage();
 
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Builtin& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Identifier& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Integer& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Character& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::String& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Cons& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Apply& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Lambda& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Let& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::LetRecursive& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(
-      std::set<core::Identifier>&, const core::Case::Alternative& x);
-  std::map<core::Identifier, Lazy*> ResolveImpl(std::set<core::Identifier>&,
-                                                const core::Case& x);
-  std::map<core::Identifier, Lazy*> Resolve(std::set<core::Identifier>& bound,
-                                            const core::Expression& x);
-  std::map<core::Identifier, Lazy*> Resolve(const core::Expression& x);
+  using Captures = flat_map<core::Identifier, Lazy*>;
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Builtin& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Identifier& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Integer& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Character& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::String& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Cons& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Apply& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Lambda& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Let& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::LetRecursive& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+                   const core::Case::Alternative& x);
+  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Case& x);
+  void Resolve(std::set<core::Identifier>& bound, Captures&,
+               const core::Expression& x);
+  Captures Resolve(const core::Expression& x);
 
   std::set<core::Identifier> GetBindingsImpl(const core::Builtin&);
   std::set<core::Identifier> GetBindingsImpl(const core::Identifier&);
@@ -303,8 +346,7 @@ struct Nil final : public Value {
 };
 
 struct Closure : public Thunk {
-  Closure(std::map<core::Identifier, Lazy*> captures)
-      : captures(std::move(captures)) {}
+  Closure(Interpreter::Captures captures) : captures(std::move(captures)) {}
   void MarkChildren() override {
     for (const auto& [id, value] : captures) value->Mark();
   }
@@ -319,7 +361,7 @@ struct Closure : public Thunk {
     }
     return result;
   }
-  std::map<core::Identifier, Lazy*> captures;
+  Interpreter::Captures captures;
 };
 
 struct Let final : public Closure {
@@ -616,7 +658,7 @@ struct UserLambda final : public Lambda {
     for (const auto& [id, value] : captures) value->Mark();
   }
   const core::Lambda& definition;
-  std::map<core::Identifier, Lazy*> captures;
+  Interpreter::Captures captures;
 };
 
 struct Apply final : public Thunk {
@@ -837,113 +879,100 @@ Value* Interpreter::StrictEvaluate(const syntax::Expression& x) {
 }
 */
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>&, const core::Builtin&) {
-  return {};
-}
+void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+                              const core::Builtin&) {}
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Identifier& x) {
-  std::map<core::Identifier, Lazy*> result;
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::Identifier& x) {
   if (!bound.contains(x)) result[x] = names.at(x).back();
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>&, const core::Integer&) {
-  return {};
+void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+                              const core::Integer&) {}
+
+void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+                              const core::Character&) {}
+
+void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+                              const core::String&) {}
+
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result,
+                              const core::Cons& x) {
+  Resolve(bound, result, x.head);
+  Resolve(bound, result, x.tail);
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>&, const core::Character&) {
-  return {};
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::Apply& x) {
+  Resolve(bound, result, x.f);
+  Resolve(bound, result, x.x);
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>&, const core::String&) {
-  return {};
-}
-
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Cons& x) {
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.head);
-  result.merge(Resolve(bound, x.tail));
-  return result;
-}
-
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Apply& x) {
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.f);
-  result.merge(Resolve(bound, x.x));
-  return result;
-}
-
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Lambda& x) {
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::Lambda& x) {
   auto [i, is_new] = bound.emplace(x.parameter);
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.result);
+  Resolve(bound, result, x.result);
   if (is_new) bound.erase(i);
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Let& x) {
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.binding.result);
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::Let& x) {
+  Resolve(bound, result, x.binding.result);
   auto [i, is_new] = bound.emplace(x.binding.name);
-  result.merge(Resolve(bound, x.result));
+  Resolve(bound, result, x.result);
   if (is_new) bound.erase(i);
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::LetRecursive& x) {
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::LetRecursive& x) {
   std::set<core::Identifier> newly_bound;
   for (const auto& binding : x.bindings) {
     auto [i, is_new] = bound.emplace(binding.name);
     if (is_new) newly_bound.insert(binding.name);
   }
-  std::map<core::Identifier, Lazy*> result;
   for (const auto& binding : x.bindings) {
-    result.merge(Resolve(bound, binding.result));
+    Resolve(bound, result, binding.result);
   }
-  result.merge(Resolve(bound, x.result));
+  Resolve(bound, result, x.result);
   for (const auto& id : newly_bound) bound.erase(id);
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Case::Alternative& x) {
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result,
+                              const core::Case::Alternative& x) {
   std::set<core::Identifier> bindings = GetBindings(x.pattern);
   std::set<core::Identifier> newly_bound;
   for (const auto& binding : bindings) {
     auto [i, is_new] = bound.emplace(binding);
     if (is_new) newly_bound.insert(binding);
   }
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.value);
+  Resolve(bound, result, x.value);
   for (const auto& id : newly_bound) bound.erase(id);
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::ResolveImpl(
-    std::set<core::Identifier>& bound, const core::Case& x) {
-  std::map<core::Identifier, Lazy*> result = Resolve(bound, x.value);
+void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+                              Captures& result, const core::Case& x) {
+  Resolve(bound, result, x.value);
   for (const auto& alternative : x.alternatives) {
-    result.merge(ResolveImpl(bound, alternative));
+    ResolveImpl(bound, result, alternative);
   }
-  return result;
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::Resolve(
-    std::set<core::Identifier>& bound, const core::Expression& x) {
+void Interpreter::Resolve(std::set<core::Identifier>& bound, Captures& result,
+                          const core::Expression& x) {
   return std::visit(
-      [this, &bound](const auto& x) { return ResolveImpl(bound, x); },
+      [this, &bound, &result](const auto& x) {
+        return ResolveImpl(bound, result, x);
+      },
       x->value);
 }
 
-std::map<core::Identifier, Lazy*> Interpreter::Resolve(
-    const core::Expression& x) {
+Interpreter::Captures Interpreter::Resolve(const core::Expression& x) {
   std::set<core::Identifier> bound;
-  return Resolve(bound, x);
+  Captures result;
+  Resolve(bound, result, x);
+  return result;
 }
 
 std::set<core::Identifier> Interpreter::GetBindingsImpl(const core::Builtin&) {
