@@ -2,6 +2,7 @@
 
 #include "debug_output.hpp"
 
+#include <algorithm>
 #include <charconv>
 #include <map>
 #include <set>
@@ -127,6 +128,71 @@ class Lazy final : public Node {
   };
 };
 
+template <typename K>
+class flat_set {
+ public:
+  flat_set() = default;
+
+  flat_set(std::initializer_list<K> contents)
+      : flat_set(std::vector(contents)) {}
+
+  flat_set(std::vector<K> contents)
+      : contents_(std::move(contents)) {
+    std::sort(contents_.begin(), contents_.end());
+  }
+
+  bool contains(const K& k) const {
+    return !contents_.empty() && contents_[Index(k)] == k;
+  }
+
+  template <typename... Args>
+  requires std::constructible_from<K, Args...>
+  std::pair<typename std::vector<K>::const_iterator, bool>
+  emplace(Args&&... args) {
+    if (contents_.empty()) {
+      return std::pair(
+          contents_.emplace(contents_.end(), std::forward<Args>(args)...),
+          true);
+    }
+    K k(std::forward<Args>(args)...);
+    const int i = Index(k);
+    if (contents_[i] == k) return std::pair(contents_.begin() + i, false);
+    return std::pair(contents_.emplace(contents_.begin() + i + 1, std::move(k)),
+                     true);
+  }
+
+  std::pair<typename std::vector<K>::const_iterator, bool> insert(const K& k) {
+    return emplace(k);
+  }
+
+  void erase(const K& k) {
+    if (contents_.empty()) return;
+    const int i = Index(k);
+    if (contents_[i] == k) contents_.erase(contents_.begin() + i);
+  }
+
+  bool empty() const { return contents_.empty(); }
+  auto size() const { return contents_.size(); }
+  auto begin() const { return contents_.begin(); }
+  auto end() const { return contents_.end(); }
+
+ private:
+  int Index(const K& k) const {
+    int a = 0, b = contents_.size();
+    while (b - a > 1) {
+      const int i = (a + b) / 2;
+      if (k < contents_[i]) {
+        b = i;
+      } else {
+        a = i;
+      }
+    }
+    return a;
+  }
+
+  std::vector<K> contents_;
+};
+
 template <typename K, typename V>
 class flat_map {
  public:
@@ -137,7 +203,7 @@ class flat_map {
     }
     const int i = Index(k);
     if (contents_[i].first == k) return contents_[i].second;
-    auto entry = contents_.emplace(contents_.begin() + i, k, V());
+    auto entry = contents_.emplace(contents_.begin() + i + 1, k, V());
     return entry->second;
   }
 
@@ -203,37 +269,37 @@ struct Interpreter {
   void CollectGarbage();
 
   using Captures = flat_map<core::Identifier, Lazy*>;
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Builtin& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Identifier& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Integer& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Character& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::String& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Cons& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&, const core::Cons& x);
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Apply& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Lambda& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Let& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&, const core::Let& x);
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::LetRecursive& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Case::Alternative& x);
-  void ResolveImpl(std::set<core::Identifier>&, Captures&, const core::Case& x);
-  void Resolve(std::set<core::Identifier>& bound, Captures&,
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&, const core::Case& x);
+  void Resolve(flat_set<core::Identifier>& bound, Captures&,
                const core::Expression& x);
   Captures Resolve(const core::Expression& x);
 
-  std::set<core::Identifier> GetBindingsImpl(const core::Builtin&);
-  std::set<core::Identifier> GetBindingsImpl(const core::Identifier&);
-  std::set<core::Identifier> GetBindingsImpl(const core::Decons&);
-  std::set<core::Identifier> GetBindingsImpl(const core::Integer&);
-  std::set<core::Identifier> GetBindingsImpl(const core::Character&);
-  std::set<core::Identifier> GetBindings(const core::Pattern&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Builtin&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Identifier&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Decons&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Integer&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Character&);
+  flat_set<core::Identifier> GetBindings(const core::Pattern&);
 
   GCPtr<Lazy> LazyEvaluate(const core::Builtin& x);
   GCPtr<Lazy> LazyEvaluate(const core::Identifier& x);
@@ -879,57 +945,57 @@ Value* Interpreter::StrictEvaluate(const syntax::Expression& x) {
 }
 */
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Builtin&) {}
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Identifier& x) {
   if (!bound.contains(x)) result[x] = names.at(x).back();
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Integer&) {}
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Character&) {}
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>&, Captures&,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::String&) {}
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result,
                               const core::Cons& x) {
   Resolve(bound, result, x.head);
   Resolve(bound, result, x.tail);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Apply& x) {
   Resolve(bound, result, x.f);
   Resolve(bound, result, x.x);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Lambda& x) {
   auto [i, is_new] = bound.emplace(x.parameter);
   Resolve(bound, result, x.result);
-  if (is_new) bound.erase(i);
+  if (is_new) bound.erase(x.parameter);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Let& x) {
   Resolve(bound, result, x.binding.result);
   auto [i, is_new] = bound.emplace(x.binding.name);
   Resolve(bound, result, x.result);
-  if (is_new) bound.erase(i);
+  if (is_new) bound.erase(x.binding.name);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::LetRecursive& x) {
-  std::set<core::Identifier> newly_bound;
+  std::vector<core::Identifier> newly_bound;
   for (const auto& binding : x.bindings) {
     auto [i, is_new] = bound.emplace(binding.name);
-    if (is_new) newly_bound.insert(binding.name);
+    if (is_new) newly_bound.push_back(binding.name);
   }
   for (const auto& binding : x.bindings) {
     Resolve(bound, result, binding.result);
@@ -938,11 +1004,11 @@ void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
   for (const auto& id : newly_bound) bound.erase(id);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result,
                               const core::Case::Alternative& x) {
-  std::set<core::Identifier> bindings = GetBindings(x.pattern);
-  std::set<core::Identifier> newly_bound;
+  flat_set<core::Identifier> bindings = GetBindings(x.pattern);
+  flat_set<core::Identifier> newly_bound;
   for (const auto& binding : bindings) {
     auto [i, is_new] = bound.emplace(binding);
     if (is_new) newly_bound.insert(binding);
@@ -951,7 +1017,7 @@ void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
   for (const auto& id : newly_bound) bound.erase(id);
 }
 
-void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Case& x) {
   Resolve(bound, result, x.value);
   for (const auto& alternative : x.alternatives) {
@@ -959,7 +1025,7 @@ void Interpreter::ResolveImpl(std::set<core::Identifier>& bound,
   }
 }
 
-void Interpreter::Resolve(std::set<core::Identifier>& bound, Captures& result,
+void Interpreter::Resolve(flat_set<core::Identifier>& bound, Captures& result,
                           const core::Expression& x) {
   return std::visit(
       [this, &bound, &result](const auto& x) {
@@ -969,35 +1035,35 @@ void Interpreter::Resolve(std::set<core::Identifier>& bound, Captures& result,
 }
 
 Interpreter::Captures Interpreter::Resolve(const core::Expression& x) {
-  std::set<core::Identifier> bound;
+  flat_set<core::Identifier> bound;
   Captures result;
   Resolve(bound, result, x);
   return result;
 }
 
-std::set<core::Identifier> Interpreter::GetBindingsImpl(const core::Builtin&) {
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Builtin&) {
   return {};
 }
 
-std::set<core::Identifier> Interpreter::GetBindingsImpl(
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(
     const core::Identifier& x) {
   return {x};
 }
 
-std::set<core::Identifier> Interpreter::GetBindingsImpl(const core::Decons& x) {
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Decons& x) {
   return {x.head, x.tail};
 }
 
-std::set<core::Identifier> Interpreter::GetBindingsImpl(const core::Integer&) {
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Integer&) {
   return {};
 }
 
-std::set<core::Identifier> Interpreter::GetBindingsImpl(
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(
     const core::Character&) {
   return {};
 }
 
-std::set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
+flat_set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
   return std::visit([this](const auto& x) { return GetBindingsImpl(x); },
                     x->value);
 }
