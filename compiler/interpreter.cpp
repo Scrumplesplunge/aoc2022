@@ -301,6 +301,19 @@ struct Interpreter {
   flat_set<core::Identifier> GetBindingsImpl(const core::Character&);
   flat_set<core::Identifier> GetBindings(const core::Pattern&);
 
+  GCPtr<Value> Evaluate(const core::Builtin& x);
+  GCPtr<Value> Evaluate(const core::Identifier& x);
+  GCPtr<Value> Evaluate(const core::Integer& x);
+  GCPtr<Value> Evaluate(const core::Character& x);
+  GCPtr<Value> Evaluate(const core::String& x);
+  GCPtr<Value> Evaluate(const core::Cons& x);
+  GCPtr<Value> Evaluate(const core::Apply& x);
+  GCPtr<Value> Evaluate(const core::Lambda& x);
+  GCPtr<Value> Evaluate(const core::Let& x);
+  GCPtr<Value> Evaluate(const core::LetRecursive& x);
+  GCPtr<Value> Evaluate(const core::Case& x);
+  GCPtr<Value> Evaluate(const core::Expression& x);
+
   GCPtr<Lazy> LazyEvaluate(const core::Builtin& x);
   GCPtr<Lazy> LazyEvaluate(const core::Identifier& x);
   GCPtr<Lazy> LazyEvaluate(const core::Integer& x);
@@ -437,8 +450,7 @@ struct Let final : public Closure {
   GCPtr<Value> RunBody(Interpreter& interpreter) override {
     interpreter.names[definition.binding.name].push_back(
         interpreter.LazyEvaluate(definition.binding.result));
-    GCPtr<Value> result =
-        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
+    GCPtr<Value> result = interpreter.Evaluate(definition.result);
     interpreter.names[definition.binding.name].pop_back();
     return result;
   }
@@ -483,8 +495,7 @@ struct LetRecursive final : public Closure {
         *holes[i] = *value;
       }
     }
-    GCPtr<Value> result =
-        interpreter.LazyEvaluate(definition.result)->Get(interpreter);
+    GCPtr<Value> result = interpreter.Evaluate(definition.result);
     for (const auto& [id, value] : definition.bindings) {
       interpreter.names[id].pop_back();
     }
@@ -498,8 +509,7 @@ struct Case final : public Closure {
       : Closure(interpreter.Resolve(definition)), definition(definition) {}
   GCPtr<Value> RunBody(Interpreter& interpreter) override {
     std::vector<Lazy*> values;
-    GCPtr<Value> v =
-        interpreter.LazyEvaluate(definition.value)->Get(interpreter);
+    GCPtr<Value> v = interpreter.Evaluate(definition.value);
     for (const auto& alternative : definition.alternatives) {
       if (GCPtr<Value> r = interpreter.TryAlternative(v, alternative)) {
         return r;
@@ -866,85 +876,6 @@ void Interpreter::CollectGarbage() {
   collect_at_size = std::max<int>(128, 8 * heap.size());
 }
 
-/*
-Value* Interpreter::StrictEvaluate(const syntax::Identifier& x) {
-  return Allocate<Int64>(x.value);
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Integer& x) {
-  return Allocate<Int64>(x.value);
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Character& x) {
-  return Allocate<Char>(x.value);
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::LessThan& x) {
-  Value* va = StrictEvaluate(x.a);
-  Value* vb = StrictEvaluate(x.b);
-  const Value::Type type = va->GetType();
-  if (type != vb->GetType()) {
-    throw std::runtime_error("cannot compare dissimilar types");
-  }
-  if (type == Value::Type::kInt64) {
-    return Allocate<Bool>(va->AsInt64() < vb->AsInt64());
-  } else if (type == Value::Type::kChar) {
-    return Allocate<Bool>(va->AsChar() < vb->AsChar());
-  } else {
-    throw std::runtime_error("cannot compare this type");
-  }
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Add& x) {
-  Value* va = StrictEvaluate(x.a);
-  Value* vb = StrictEvaluate(x.b);
-  if (va->GetType() != Value::Type::kInt64 ||
-      vb->GetType() != Value::Type::kInt64) {
-    throw std::runtime_error("cannot add types");
-  }
-  return Allocate<Int64>(va->AsInt64() + vb->AsInt64());
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Cons& x) {
-  return Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail));
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Apply& x) {
-  throw std::runtime_error(":(");
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Compose& x) {
-  throw std::runtime_error(":(");
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Case& x) {
-  Value* v = StrictEvaluate(x.value);
-  for (const auto& alternative : x.alternatives) {
-    if (MatchesPattern(v, alternative.pattern)) {
-      return StrictEvaluate(alternative.value);
-    }
-  }
-  throw std::runtime_error("non-exhaustative case");
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::If& x) {
-  Value* c = StrictEvaluate(x.condition);
-  if (c->GetType() != Value::Type::kBool) {
-    throw std::runtime_error("not a bool");
-  }
-  if (c->AsBool()) {
-    return StrictEvaluate(x.then_branch);
-  } else {
-    return StrictEvaluate(x.else_branch);
-  }
-}
-
-Value* Interpreter::StrictEvaluate(const syntax::Expression& x) {
-  return std::visit([this](const auto& x) { return StrictEvaluate(x); },
-                    x->value);
-}
-*/
-
 void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Builtin&) {}
 
@@ -1068,42 +999,91 @@ flat_set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
                     x->value);
 }
 
-GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Builtin& x) {
+GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
   switch (x) {
     case core::Builtin::kAdd:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Add>()));
+      return Allocate<NativeClosure>(Allocate<Add>());
     case core::Builtin::kAnd:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<And>()));
+      return Allocate<NativeClosure>(Allocate<And>());
     case core::Builtin::kConcat:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Concat>()));
+      return Allocate<NativeClosure>(Allocate<Concat>());
     case core::Builtin::kDivide:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Divide>()));
+      return Allocate<NativeClosure>(Allocate<Divide>());
     case core::Builtin::kEqual:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Equal>()));
+      return Allocate<NativeClosure>(Allocate<Equal>());
     case core::Builtin::kFalse:
-      return Allocate<Lazy>(Allocate<Bool>(false));
+      return Allocate<Bool>(false);
     case core::Builtin::kLessThan:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<LessThan>()));
+      return Allocate<NativeClosure>(Allocate<LessThan>());
     case core::Builtin::kModulo:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Modulo>()));
+      return Allocate<NativeClosure>(Allocate<Modulo>());
     case core::Builtin::kMultiply:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Multiply>()));
+      return Allocate<NativeClosure>(Allocate<Multiply>());
     case core::Builtin::kNil:
-      return Allocate<Lazy>(Allocate<Nil>());
+      return Allocate<Nil>();
     case core::Builtin::kNot:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Not>()));
+      return Allocate<NativeClosure>(Allocate<Not>());
     case core::Builtin::kOr:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Or>()));
+      return Allocate<NativeClosure>(Allocate<Or>());
     case core::Builtin::kReadInt:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ReadInt>()));
+      return Allocate<NativeClosure>(Allocate<ReadInt>());
     case core::Builtin::kShowInt:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<ShowInt>()));
+      return Allocate<NativeClosure>(Allocate<ShowInt>());
     case core::Builtin::kSubtract:
-      return Allocate<Lazy>(Allocate<NativeClosure>(Allocate<Subtract>()));
+      return Allocate<NativeClosure>(Allocate<Subtract>());
     case core::Builtin::kTrue:
-      return Allocate<Lazy>(Allocate<Bool>(true));
+      return Allocate<Bool>(true);
   }
   throw std::runtime_error(StrCat("unimplemented builtin: ", x));
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Identifier& identifier) {
+  return LazyEvaluate(identifier)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Integer& x) {
+  return Allocate<Int64>(x.value);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Character& x) {
+  return Allocate<Char>(x.value);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::String& x) {
+  return LazyEvaluate(x)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Cons& x) {
+  return Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail));
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Apply& x) {
+  return LazyEvaluate(x)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Lambda& x) {
+  return Allocate<UserLambda>(*this, x);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Let& x) {
+  return LazyEvaluate(x)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::LetRecursive& x) {
+  return LazyEvaluate(x)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Case& x) {
+  return LazyEvaluate(x)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Expression& x) {
+  return std::visit([this](const auto& x) { return Evaluate(x); },
+                    x->value);
+}
+
+GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Builtin& x) {
+  return Allocate<Lazy>(Evaluate(x));
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Identifier& identifier) {
@@ -1111,11 +1091,11 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Identifier& identifier) {
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Integer& x) {
-  return Allocate<Lazy>(Allocate<Int64>(x.value));
+  return Allocate<Lazy>(Evaluate(x));
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Character& x) {
-  return Allocate<Lazy>(Allocate<Char>(x.value));
+  return Allocate<Lazy>(Evaluate(x));
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::String& x) {
@@ -1132,7 +1112,7 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Apply& x) {
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Lambda& x) {
-  return Allocate<Lazy>(Allocate<UserLambda>(*this, x));
+  return Allocate<Lazy>(Evaluate(x));
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Let& x) {
@@ -1163,19 +1143,19 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Builtin& b,
   switch (b) {
     case core::Builtin::kNil:
       if (v->GetType() == Value::Type::kNil) {
-        return LazyEvaluate(x)->Get(*this);
+        return Evaluate(x);
       } else {
         return nullptr;
       }
     case core::Builtin::kTrue:
       if (v->GetType() == Value::Type::kBool && v->AsBool()) {
-        return LazyEvaluate(x)->Get(*this);
+        return Evaluate(x);
       } else {
         return nullptr;
       }
     case core::Builtin::kFalse:
       if (v->GetType() == Value::Type::kBool && !v->AsBool()) {
-        return LazyEvaluate(x)->Get(*this);
+        return Evaluate(x);
       } else {
         return nullptr;
       }
@@ -1187,9 +1167,9 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Builtin& b,
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Identifier& i,
                                    const core::Expression& x) {
   names[i].push_back(Allocate<Lazy>(v));
-  GCPtr<Lazy> l = LazyEvaluate(x);
+  GCPtr<Value> result = Evaluate(x);
   names[i].pop_back();
-  return l->Get(*this);
+  return result;
 }
 
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Decons& d,
@@ -1198,10 +1178,10 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Decons& d,
   const auto& cons = v->AsCons();
   names[d.head].push_back(cons.head);
   names[d.tail].push_back(cons.tail);
-  GCPtr<Lazy> l = LazyEvaluate(x);
+  GCPtr<Value> result = Evaluate(x);
   names[d.head].pop_back();
   names[d.tail].pop_back();
-  return l->Get(*this);
+  return result;
 }
 
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Integer& i,
@@ -1209,7 +1189,7 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Integer& i,
   if (v->GetType() != Value::Type::kInt64 || v->AsInt64() != i.value) {
     return nullptr;
   }
-  return LazyEvaluate(x)->Get(*this);
+  return Evaluate(x);
 }
 
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Character& c,
@@ -1217,7 +1197,7 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Character& c,
   if (v->GetType() != Value::Type::kChar || v->AsChar() != c.value) {
     return nullptr;
   }
-  return LazyEvaluate(x)->Get(*this);
+  return Evaluate(x);
 }
 
 void Interpreter::Run(const core::Expression& program) {
@@ -1234,7 +1214,7 @@ void Interpreter::Run(const core::Expression& program) {
     } else {
       throw std::runtime_error("type error in output");
     }
-    }
+  }
 }
 
 }  // namespace
