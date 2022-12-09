@@ -1,3 +1,5 @@
+MODE=Release
+
 all: build/compiler
 
 build:
@@ -5,6 +7,6 @@ build:
 
 .PHONY:
 cmake:
-	(cd compiler && cmake -B ../build && ${MAKE} -C ../build)
+	(cd compiler && cmake -B ../build -D CMAKE_BUILD_TYPE=${MODE} && ${MAKE} -C ../build)
 
 build/compiler: cmake | build
