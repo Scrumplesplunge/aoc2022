@@ -1,0 +1,111 @@
+-- visibleInRow :: [LabelledTree] -> [Coord]
+visibleInRow xs = visibleInRow' (0 - 1) xs
+visibleInRow' h xs =
+  case xs of
+    [] -> []
+    (x : xs') ->
+      case x of
+        (h' : pos) ->
+          if h' > h then
+            pos : visibleInRow' h' xs'
+          else
+            visibleInRow' h xs'
+
+-- transpose :: [[Int]] -> [[Int]]
+transpose xs = transpose' (concat (map (take 1) xs)) (map (drop 1) xs)
+transpose' x xs = if null x then [] else x : transpose xs
+
+labelRow i cs = labelRow' i 0 cs
+labelRow' i j cs =
+  case cs of
+    [] -> []
+    (c : cs') -> (c : i : j) : labelRow' i (j + 1) cs'
+
+-- type Coord = CoordX : CoordY
+-- type LabelledTree = (TreeHeight : Coord)
+-- label :: [[TreeHeight]] -> [[LabelledTree]]
+label rs = label' 0 rs
+label' i rs =
+  case rs of
+    [] -> []
+    (r : rs') -> labelRow i r : label' (i + 1) rs'
+
+-- visibleFromLeft :: [[LabelledTree]] -> [Coord]
+visibleFromLeft = concat . map visibleInRow
+visibleFromTop = visibleFromLeft . transpose
+visibleFromRight = visibleFromLeft . map reverse
+visibleFromBottom = visibleFromTop . reverse
+visibleInRows rs = nub (visibleFromLeft rs ++ visibleFromRight rs)
+visibleInColumns rs = nub (visibleFromTop rs ++ visibleFromBottom rs)
+visible rs = nub (visibleInRows rs ++ visibleInColumns rs)
+
+parse = label . map parseRow . lines
+parseRow cs =
+  case cs of
+    [] -> []
+    (c : cs') -> readInt [c] : parseRow cs'
+
+-- fudgeRow takes a row and returns a list of pairs of lists containing the
+-- trees to the left and right of each position.
+
+-- type LRPair = ([LabelledTree] : [LabelledTree] : LabelledTree)
+-- fudgeRow :: [LabelledTree] -> [LRPair]
+fudgeRow cs =
+  case cs of
+    [] -> []
+    (c : cs') -> fudgeRow' [] c cs'
+fudgeRow' l x r =
+  case r of
+    [] -> [(l : r : x)]
+    (x' : r') -> (l : r : x) : fudgeRow' (x : l) x' r'
+-- type UDLRTuple = ([LabelledTree] : [LabelledTree] : LRPair)
+-- fudge :: [[LabelledTree]] -> [UDLRTuple]
+const x y = x
+prep r rs =
+  case rs of
+    [] -> map (const []) r
+    (x : xs) -> transpose rs
+fudge rs =
+  case rs of
+    [] -> []
+    (r : rs') -> fudge' [] r rs'
+fudge' a r b =
+  case b of
+    [] -> combine (prep r a) (fudgeRow r) (prep r b)
+    (r' : b') ->
+      combine (prep r a) (fudgeRow r) (prep r b) ++ fudge' (r : a) r' b'
+combine as rs bs =
+  case as of
+    [] -> []
+    (a : as') -> case rs of
+      [] -> []
+      (r : rs') -> case bs of
+        [] -> []
+        (b : bs') -> (a : b : r) : combine as' rs' bs'
+
+height hxy =
+  case hxy of
+    (h : xy) -> h
+
+view h ts = view' h 0 ts
+view' h n ts =
+  case ts of
+    [] -> n
+    (t : ts') ->
+      if height t < h then
+        view' h (n + 1) ts'
+      else
+        n + 1
+score udlr =
+  case udlr of
+    (u : dlrx) -> case dlrx of
+      (d : lrx) -> case lrx of
+        (l : rx) -> case rx of
+          (r : x) -> case x of
+            (h : pos) ->
+              view h u * view h d * view h l * view h r
+
+part1 = length . visible
+part2 = maximum . map score . fudge
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse
