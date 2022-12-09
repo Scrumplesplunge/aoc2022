@@ -91,7 +91,7 @@ drop n xs =
     [] -> []
     (x : xs') ->
       if n == 0 then
-        xs'
+        xs
       else
         drop (n - 1) xs'
 
