@@ -25,6 +25,7 @@ std::ostream& operator<<(std::ostream&, const Integer&);
 std::ostream& operator<<(std::ostream&, const Character&);
 std::ostream& operator<<(std::ostream&, const String&);
 std::ostream& operator<<(std::ostream&, const List&);
+std::ostream& operator<<(std::ostream&, const Tuple&);
 std::ostream& operator<<(std::ostream&, const Add&);
 std::ostream& operator<<(std::ostream&, const Subtract&);
 std::ostream& operator<<(std::ostream&, const Multiply&);
@@ -58,6 +59,7 @@ namespace core {
 std::ostream& operator<<(std::ostream&, const Identifier&);
 
 std::ostream& operator<<(std::ostream&, const Decons&);
+std::ostream& operator<<(std::ostream&, const Detuple&);
 std::ostream& operator<<(std::ostream&, const Pattern&);
 
 std::ostream& operator<<(std::ostream&, const Builtin&);

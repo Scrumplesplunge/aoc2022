@@ -87,6 +87,7 @@ struct Value : public Node {
     kCons,
     kNil,
     kLambda,
+    kTuple,
   };
 
   virtual Type GetType() const = 0;
@@ -95,6 +96,7 @@ struct Value : public Node {
   std::int64_t AsInt64() const;
   char AsChar() const;
   const ConsData& AsCons() const;
+  std::span<Lazy* const> AsTuple() const;
   void Enter(Interpreter&);
 };
 
@@ -281,6 +283,8 @@ struct Interpreter {
                    const core::String& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&, const core::Cons& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
+                   const core::Tuple& x);
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Apply& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Lambda& x);
@@ -297,6 +301,7 @@ struct Interpreter {
   flat_set<core::Identifier> GetBindingsImpl(const core::Builtin&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Identifier&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Decons&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Detuple&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Integer&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Character&);
   flat_set<core::Identifier> GetBindings(const core::Pattern&);
@@ -307,6 +312,7 @@ struct Interpreter {
   GCPtr<Value> Evaluate(const core::Character& x);
   GCPtr<Value> Evaluate(const core::String& x);
   GCPtr<Value> Evaluate(const core::Cons& x);
+  GCPtr<Value> Evaluate(const core::Tuple& x);
   GCPtr<Value> Evaluate(const core::Apply& x);
   GCPtr<Value> Evaluate(const core::Lambda& x);
   GCPtr<Value> Evaluate(const core::Let& x);
@@ -320,6 +326,7 @@ struct Interpreter {
   GCPtr<Lazy> LazyEvaluate(const core::Character& x);
   GCPtr<Lazy> LazyEvaluate(const core::String& x);
   GCPtr<Lazy> LazyEvaluate(const core::Cons& x);
+  GCPtr<Lazy> LazyEvaluate(const core::Tuple& x);
   GCPtr<Lazy> LazyEvaluate(const core::Apply& x);
   GCPtr<Lazy> LazyEvaluate(const core::Lambda& x);
   GCPtr<Lazy> LazyEvaluate(const core::Let& x);
@@ -333,6 +340,8 @@ struct Interpreter {
   GCPtr<Value> TryAlternative(Value*, const core::Identifier&,
                               const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Decons&,
+                              const core::Expression& x);
+  GCPtr<Value> TryAlternative(Value*, const core::Detuple&,
                               const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Integer&,
                               const core::Expression& x);
@@ -384,6 +393,8 @@ const char* Name(Value::Type t) {
       return "nil";
     case Value::Type::kLambda:
       return "lambda";
+    case Value::Type::kTuple:
+      return "tuple";
   }
   std::abort();
 }
@@ -417,6 +428,14 @@ struct Cons final : public Value {
     data.tail->Mark();
   }
   ConsData data;
+};
+
+struct Tuple final : public Value {
+  Type GetType() const override { return Type::kTuple; }
+  void MarkChildren() override {
+    for (auto& element : elements) element->Mark();
+  }
+  std::vector<Lazy*> elements;
 };
 
 struct Nil final : public Value {
@@ -844,6 +863,11 @@ const ConsData& Value::AsCons() const {
   return static_cast<const Cons*>(this)->data;
 }
 
+std::span<Lazy* const> Value::AsTuple() const {
+  if (GetType() != Type::kTuple) throw std::runtime_error("not a tuple");
+  return static_cast<const Tuple*>(this)->elements;
+}
+
 void Value::Enter(Interpreter& interpreter) {
   if (GetType() != Type::kLambda) throw std::runtime_error("not a lambda");
   return static_cast<Lambda*>(this)->Enter(interpreter);
@@ -898,6 +922,14 @@ void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               const core::Cons& x) {
   Resolve(bound, result, x.head);
   Resolve(bound, result, x.tail);
+}
+
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
+                              Captures& result,
+                              const core::Tuple& x) {
+  for (const auto& element : x.elements) {
+    Resolve(bound, result, element);
+  }
 }
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
@@ -985,6 +1017,11 @@ flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Decons& x) {
   return {x.head, x.tail};
 }
 
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(
+    const core::Detuple& x) {
+  return flat_set(x.elements);
+}
+
 flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Integer&) {
   return {};
 }
@@ -1057,6 +1094,14 @@ GCPtr<Value> Interpreter::Evaluate(const core::Cons& x) {
   return Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail));
 }
 
+GCPtr<Value> Interpreter::Evaluate(const core::Tuple& x) {
+  GCPtr<Tuple> tuple = Allocate<Tuple>();
+  for (const auto& element : x.elements) {
+    tuple->elements.push_back(LazyEvaluate(element));
+  }
+  return tuple;
+}
+
 GCPtr<Value> Interpreter::Evaluate(const core::Apply& x) {
   return LazyEvaluate(x)->Get(*this);
 }
@@ -1107,6 +1152,10 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Cons& x) {
       Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail)));
 }
 
+GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Tuple& x) {
+  return Allocate<Lazy>(Evaluate(x));
+}
+
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Apply& x) {
   return Allocate<Lazy>(Allocate<Apply>(LazyEvaluate(x.f), LazyEvaluate(x.x)));
 }
@@ -1132,7 +1181,8 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Expression& x) {
                     x->value);
 }
 
-GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Case::Alternative& x) {
+GCPtr<Value> Interpreter::TryAlternative(Value* v,
+                                         const core::Case::Alternative& x) {
   return std::visit(
       [&](const auto& pattern) { return TryAlternative(v, pattern, x.value); },
       x.pattern->value);
@@ -1181,6 +1231,22 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Decons& d,
   GCPtr<Value> result = Evaluate(x);
   names[d.head].pop_back();
   names[d.tail].pop_back();
+  return result;
+}
+
+GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Detuple& d,
+                                         const core::Expression& x) {
+  if (v->GetType() != Value::Type::kTuple) return nullptr;
+  std::span<Lazy* const> elements = v->AsTuple();
+  if (elements.size() != d.elements.size()) return nullptr;
+  const int n = elements.size();
+  for (int i = 0; i < n; i++) {
+    names[d.elements[i]].push_back(elements[i]);
+  }
+  GCPtr<Value> result = Evaluate(x);
+  for (int i = 0; i < n; i++) {
+    names[d.elements[i]].pop_back();
+  }
   return result;
 }
 

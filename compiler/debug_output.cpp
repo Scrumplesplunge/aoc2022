@@ -143,6 +143,18 @@ std::ostream& operator<<(std::ostream& output, const List& x) {
   }
 }
 
+std::ostream& operator<<(std::ostream& output, const Tuple& x) {
+  if (x.elements.empty()) {
+    return output << "Tuple({})";
+  } else {
+    output << "Tuple({" << x.elements[0];
+    for (int i = 1, n = x.elements.size(); i < n; i++) {
+      output << ", " << x.elements[i];
+    }
+    return output << "})";
+  }
+}
+
 std::ostream& operator<<(std::ostream& output, const Add& x) {
   return output << "Add(" << x.a << ", " << x.b << ")";
 }
@@ -287,6 +299,18 @@ std::ostream& operator<<(std::ostream& output, const Identifier& x) {
 
 std::ostream& operator<<(std::ostream& output, const Decons& x) {
   return output << "Decons(" << x.head << ", " << x.tail << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Detuple& x) {
+  if (x.elements.empty()) {
+    return output << "Detuple({})";
+  } else {
+    output << "Detuple({" << x.elements[0];
+    for (int i = 1, n = x.elements.size(); i < n; i++) {
+      output << ", " << x.elements[i];
+    }
+    return output << "})";
+  }
 }
 
 std::ostream& operator<<(std::ostream& output, const Pattern& x) {

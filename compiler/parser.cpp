@@ -127,9 +127,22 @@ struct Parser {
   }
 
   syntax::Expression ParseTerm() {
+    const Location location = cursor[0].location;
     if (Consume(Symbol::kOpenParen)) {
+      if (Consume(Symbol::kCloseParen)) {
+        return syntax::Tuple(location, {});
+      }
       syntax::Expression result = ParseExpression();
-      if (!Consume(Symbol::kCloseParen)) throw Error("expected ')'");
+      if (Consume(Symbol::kComma)) {
+        std::vector<syntax::Expression> elements;
+        elements.push_back(std::move(result));
+        do {
+          elements.push_back(ParseExpression());
+        } while (Consume(Symbol::kComma));
+        Eat(Symbol::kCloseParen);
+        return syntax::Tuple(location, std::move(elements));
+      }
+      Eat(Symbol::kCloseParen);
       return result;
     } else if (NextIs(Symbol::kOpenSquare)) {
       return ParseList();

@@ -54,6 +54,12 @@ struct List {
   std::vector<Expression> elements;
 };
 
+struct Tuple {
+  bool operator==(const Tuple&) const = default;
+  Location location;
+  std::vector<Expression> elements;
+};
+
 struct Add {
   bool operator==(const Add&) const = default;
   Location location;
@@ -197,10 +203,10 @@ struct If {
 
 struct ExpressionVariant {
   bool operator==(const ExpressionVariant&) const = default;
-  std::variant<Identifier, Integer, Character, String, List, Add, Subtract,
-               Multiply, Divide, Modulo, LessThan, LessOrEqual, GreaterThan,
-               GreaterOrEqual, Equal, NotEqual, And, Or, Not, Cons, Concat,
-               Apply, Compose, Case, Let, If>
+  std::variant<Identifier, Integer, Character, String, List, Tuple, Add,
+               Subtract, Multiply, Divide, Modulo, LessThan, LessOrEqual,
+               GreaterThan, GreaterOrEqual, Equal, NotEqual, And, Or, Not, Cons,
+               Concat, Apply, Compose, Case, Let, If>
       value;
 };
 

@@ -47,6 +47,11 @@ struct Decons {
   Identifier head, tail;
 };
 
+struct Detuple {
+  bool operator==(const Detuple&) const = default;
+  std::vector<Identifier> elements;
+};
+
 struct Integer {
   bool operator==(const Integer&) const = default;
   std::int64_t value;
@@ -64,7 +69,7 @@ struct String {
 
 struct PatternVariant {
   bool operator==(const PatternVariant&) const = default;
-  std::variant<Builtin, Identifier, Decons, Integer, Character> value;
+  std::variant<Builtin, Identifier, Decons, Detuple, Integer, Character> value;
 };
 
 template <HoldableBy<PatternVariant> T>
@@ -91,6 +96,11 @@ class Expression {
 struct Cons {
   bool operator==(const Cons&) const = default;
   Expression head, tail;
+};
+
+struct Tuple {
+  bool operator==(const Tuple&) const = default;
+  std::vector<Expression> elements;
 };
 
 struct Apply {
@@ -136,8 +146,8 @@ struct Case {
 
 struct ExpressionVariant {
   bool operator==(const ExpressionVariant&) const = default;
-  std::variant<Builtin, Identifier, Integer, Character, String, Cons, Apply,
-               Lambda, Let, LetRecursive, Case>
+  std::variant<Builtin, Identifier, Integer, Character, String, Cons, Tuple,
+               Apply, Lambda, Let, LetRecursive, Case>
       value;
 };
 

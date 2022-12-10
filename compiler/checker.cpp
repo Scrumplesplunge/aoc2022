@@ -80,6 +80,14 @@ struct Checker {
     return result;
   }
 
+  core::Expression Check(const syntax::Tuple& x) {
+    std::vector<core::Expression> elements;
+    for (const auto& element : x.elements) {
+      elements.push_back(Check(element));
+    }
+    return core::Tuple(std::move(elements));
+  }
+
   core::Expression Check(const syntax::Add& x) {
     core::Expression a = Check(x.a);
     core::Expression b = Check(x.b);
@@ -260,6 +268,26 @@ struct Checker {
     names.resize(n);
     return core::Case::Alternative(
         core::Decons(std::move(head), std::move(tail)), std::move(result));
+  }
+
+  core::Case::Alternative CheckAlternativeImpl(
+      const syntax::Tuple& x, const syntax::Expression& value) {
+    const auto n = names.size();
+    std::vector<core::Identifier> elements;
+    for (const auto& element : x.elements) {
+      const auto* i = std::get_if<syntax::Identifier>(&element->value);
+      if (!i) {
+        throw Error(element.location(), "nested patterns are unimplemented");
+      }
+      const core::Identifier id = NextIdentifier(element.location());
+      elements.push_back(id);
+      names.push_back(Name{
+          .location = i->location, .name = i->value, .value = id});
+    }
+    core::Expression result = Check(value);
+    names.resize(n);
+    return core::Case::Alternative(core::Detuple(std::move(elements)),
+                                   std::move(result));
   }
 
   core::Case::Alternative CheckAlternativeImpl(
