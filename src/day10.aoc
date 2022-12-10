@@ -1,0 +1,36 @@
+parse = map words . lines
+
+noop emit c x ls =
+  emit c x (run emit (c + 1) x ls)
+
+addx emit d c x ls =
+  emit c x (emit (c + 1) x (run emit (c + 2) (x + d) ls))
+
+run emit c x ls =
+  case ls of
+    [] -> []
+    (l : ls') -> case l of
+      (op : args) ->
+        if op == "addx" then
+          case args of
+            (delta : nil) -> addx emit (readInt delta) c x ls'
+        else
+          noop emit c x ls'
+
+emitPart1 c x next = if (c % 40) == 20 then c * x : next else next
+
+abs x = if x < 0 then 0 - x else x
+handleLines c x next = if c % 40 == 0 then '\n' : next else next
+emitPart2 c x next =
+  case (c - 1) % 40 of
+    h ->
+      if abs (h - x) <= 1 then
+        '#' : handleLines c x next
+      else
+        ' ' : handleLines c x next
+
+part1 = sum . run emitPart1 1 1
+part2 = run emitPart2 1 1
+
+solve input = showInt (part1 input) ++ "\n" ++ part2 input
+main = solve . parse
