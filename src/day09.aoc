@@ -3,23 +3,23 @@ parseLine l =
   case words l of
     (ds : tail) -> case ds of
       (d : nil) -> case tail of
-        (n : nil) -> (d : readInt n)
+        (n : nil) -> (d, readInt n)
 
 neg x = 0 - x
 abs x = if x < 0 then neg x else x
 
 move d h =
   case h of
-    (x : y) -> case d of
-      'U' -> (x : y - 1)
-      'D' -> (x : y + 1)
-      'L' -> (x - 1 : y)
-      'R' -> (x + 1 : y)
+    (x, y) -> case d of
+      'U' -> (x, y - 1)
+      'D' -> (x, y + 1)
+      'L' -> (x - 1, y)
+      'R' -> (x + 1, y)
 
 dist a b =
   case a of
-    (ax : ay) -> case b of
-      (bx : by) -> max (abs (ax - bx)) (abs (ay - by))
+    (ax, ay) -> case b of
+      (bx, by) -> max (abs (ax - bx)) (abs (ay - by))
 
 sign x = if x < 0 then neg 1 else if x > 0 then 1 else 0
 
@@ -27,8 +27,8 @@ constrain h t =
   if dist h t <= 1 then
     t
   else case h of
-    (hx : hy) -> case t of
-      (tx : ty) -> (tx + sign (hx - tx) : ty + sign (hy - ty))
+    (hx, hy) -> case t of
+      (tx, ty) -> (tx + sign (hx - tx), ty + sign (hy - ty))
 
 update d rope =
   case rope of
@@ -37,26 +37,26 @@ update d rope =
       [] -> [move d r]
       (r' : rs'') -> constrain r' r : r' : rs''
 
-origin = (0 : 0)
+origin = (0, 0)
 repeat x = x : repeat x
 
 run len moves =
   case moves of
     [] -> []
     (m : ms) -> case m of
-      (d : n) -> run' d n (take len (repeat origin)) ms
+      (d, n) -> run' d n (take len (repeat origin)) ms
 run' d n rope ms =
   if n == 0 then case ms of
     [] -> []
     (m : ms') -> case m of
-      (d' : n') -> run' d' n' rope ms'
+      (d', n') -> run' d' n' rope ms'
   else
     runFollow d (n - 1) (update d rope) ms
 runFollow d n rope ms = head rope : run' d n rope ms
 
 uid pos =
   case pos of
-    (x : y) -> 2001 * (x + 2001) + (y + 2001)
+    (x, y) -> 2001 * (x + 2001) + (y + 2001)
 
 uniq xs =
   case xs of
