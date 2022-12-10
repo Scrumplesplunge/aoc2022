@@ -4,6 +4,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 
 namespace aoc2022 {
@@ -293,24 +294,8 @@ struct Checker {
     return core::Case(std::move(value), std::move(alternatives));
   }
 
-  core::Expression Check(const syntax::If& x) {
-    core::Expression condition = Check(x.condition),
-                     then_branch = Check(x.then_branch),
-                     else_branch = Check(x.else_branch);
-    return core::Case(
-        std::move(condition),
-        {core::Case::Alternative(core::Builtin::kTrue, std::move(then_branch)),
-         core::Case::Alternative(core::Builtin::kFalse,
-                                 std::move(else_branch))});
-  }
-
-  core::Expression Check(const syntax::Expression& x) {
-    return std::visit(
-        [&](const auto& x) -> core::Expression { return Check(x); }, x->value);
-  }
-
-  core::Binding CheckDefinition(core::Identifier name,
-                                const syntax::Binding& definition) {
+  core::Binding CheckBinding(core::Identifier name,
+                             const syntax::Binding& definition) {
     const auto n = names.size();
     std::vector<core::Identifier> parameters;
     for (const auto& parameter : definition.parameters) {
@@ -326,6 +311,52 @@ struct Checker {
       result = core::Lambda(parameters[i], std::move(result));
     }
     return core::Binding(name, std::move(result));
+  }
+
+  core::Expression Check(const syntax::Let& x) {
+    struct BindingData {
+      core::Identifier name;
+      const syntax::Binding* definition;
+    };
+    const int n = names.size();
+    std::set<std::string> binding_names;
+    std::vector<BindingData> definitions;
+    for (const auto& definition : x.bindings) {
+      if (!binding_names.insert(definition.name.value).second) {
+        throw Error(definition.location, "redefinition of ",
+                    definition.name.value, " within let binding");
+      }
+      const core::Identifier name = NextIdentifier(definition.location);
+      names.push_back(Name{.location = definition.location,
+                           .name = definition.name.value,
+                           .value = name});
+      definitions.push_back(BindingData{name, &definition});
+    }
+
+    std::vector<core::Binding> bindings;
+    for (const auto [name, definition] : definitions) {
+      bindings.push_back(CheckBinding(name, *definition));
+    }
+
+    core::Expression value = Check(x.value);
+    names.resize(n);
+    return core::LetRecursive(std::move(bindings), value);
+  }
+
+  core::Expression Check(const syntax::If& x) {
+    core::Expression condition = Check(x.condition),
+                     then_branch = Check(x.then_branch),
+                     else_branch = Check(x.else_branch);
+    return core::Case(
+        std::move(condition),
+        {core::Case::Alternative(core::Builtin::kTrue, std::move(then_branch)),
+         core::Case::Alternative(core::Builtin::kFalse,
+                                 std::move(else_branch))});
+  }
+
+  core::Expression Check(const syntax::Expression& x) {
+    return std::visit(
+        [&](const auto& x) -> core::Expression { return Check(x); }, x->value);
   }
 
   core::Expression Check(const syntax::Program& program) {
@@ -348,7 +379,7 @@ struct Checker {
 
     std::vector<core::Binding> bindings;
     for (const auto [name, definition] : definitions) {
-      bindings.push_back(CheckDefinition(name, *definition));
+      bindings.push_back(CheckBinding(name, *definition));
     }
 
     const Name* main = TryLookup("main");

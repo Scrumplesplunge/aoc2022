@@ -117,6 +117,8 @@ struct Parser {
       return result;
     } else if (NextIs(Keyword::kCase)) {
       return ParseCase();
+    } else if (NextIs(Keyword::kLet)) {
+      return ParseLet();
     } else if (NextIs(Keyword::kIf)) {
       return ParseIf();
     } else {
@@ -267,6 +269,24 @@ struct Parser {
     return syntax::Case(location, std::move(value), std::move(alternatives));
   }
 
+  syntax::Let ParseLet() {
+    const Location location = cursor[0].location;
+    Eat(Keyword::kLet);
+    bool has_indent = Consume(Space::kIndent);
+    std::vector<syntax::Binding> bindings;
+    bindings.push_back(ParseBinding());
+    if (has_indent) {
+      while (Consume(Space::kNewline)) {
+        bindings.push_back(ParseBinding());
+      }
+      Eat(Space::kDedent);
+    }
+    Consume(Space::kNewline);
+    Eat(Keyword::kIn);
+    syntax::Expression value = ParseExpression();
+    return syntax::Let(location, std::move(bindings), std::move(value));
+  }
+
   syntax::If ParseIf() {
     const Location location = cursor[0].location;
     Eat(Keyword::kIf);
@@ -296,9 +316,7 @@ struct Parser {
 
   template <typename T>
   void Eat(const T& s) {
-    if (!Consume(s)) {
-      throw Error(cursor[0].location, "expected ", s, ", got ", cursor[0]);
-    }
+    if (!Consume(s)) throw Error("expected ", s, ", got ", cursor[0]);
   }
 
   std::span<const Token> cursor;
