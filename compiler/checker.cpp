@@ -377,8 +377,8 @@ struct Checker {
                      else_branch = Check(x.else_branch);
     return core::Case(
         std::move(condition),
-        {core::Case::Alternative(core::Builtin::kTrue, std::move(then_branch)),
-         core::Case::Alternative(core::Builtin::kFalse,
+        {core::Case::Alternative(core::Boolean(true), std::move(then_branch)),
+         core::Case::Alternative(core::Boolean(false),
                                  std::move(else_branch))});
   }
 

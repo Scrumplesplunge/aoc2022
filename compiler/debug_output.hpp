@@ -63,6 +63,7 @@ std::ostream& operator<<(std::ostream&, const Detuple&);
 std::ostream& operator<<(std::ostream&, const Pattern&);
 
 std::ostream& operator<<(std::ostream&, const Builtin&);
+std::ostream& operator<<(std::ostream&, const Boolean&);
 std::ostream& operator<<(std::ostream&, const Integer&);
 std::ostream& operator<<(std::ostream&, const Character&);
 std::ostream& operator<<(std::ostream&, const String&);

@@ -29,7 +29,6 @@ enum class Builtin {
   kConcat,
   kDivide,
   kEqual,
-  kFalse,
   kLessThan,
   kModulo,
   kMultiply,
@@ -39,7 +38,6 @@ enum class Builtin {
   kReadInt,
   kShowInt,
   kSubtract,
-  kTrue,
 };
 
 struct Decons {
@@ -50,6 +48,11 @@ struct Decons {
 struct Detuple {
   bool operator==(const Detuple&) const = default;
   std::vector<Identifier> elements;
+};
+
+struct Boolean {
+  bool operator==(const Boolean&) const = default;
+  bool value;
 };
 
 struct Integer {
@@ -69,7 +72,9 @@ struct String {
 
 struct PatternVariant {
   bool operator==(const PatternVariant&) const = default;
-  std::variant<Builtin, Identifier, Decons, Detuple, Integer, Character> value;
+  std::variant<Builtin, Identifier, Decons, Detuple, Boolean, Integer,
+               Character>
+      value;
 };
 
 template <HoldableBy<PatternVariant> T>
@@ -146,8 +151,8 @@ struct Case {
 
 struct ExpressionVariant {
   bool operator==(const ExpressionVariant&) const = default;
-  std::variant<Builtin, Identifier, Integer, Character, String, Cons, Tuple,
-               Apply, Lambda, Let, LetRecursive, Case>
+  std::variant<Builtin, Identifier, Boolean, Integer, Character, String, Cons,
+               Tuple, Apply, Lambda, Let, LetRecursive, Case>
       value;
 };
 

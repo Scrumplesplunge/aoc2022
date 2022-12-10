@@ -276,6 +276,8 @@ struct Interpreter {
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Identifier& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
+                   const core::Boolean& x);
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Integer& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Character& x);
@@ -302,12 +304,14 @@ struct Interpreter {
   flat_set<core::Identifier> GetBindingsImpl(const core::Identifier&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Decons&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Detuple&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::Boolean&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Integer&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Character&);
   flat_set<core::Identifier> GetBindings(const core::Pattern&);
 
   GCPtr<Value> Evaluate(const core::Builtin& x);
   GCPtr<Value> Evaluate(const core::Identifier& x);
+  GCPtr<Value> Evaluate(const core::Boolean& x);
   GCPtr<Value> Evaluate(const core::Integer& x);
   GCPtr<Value> Evaluate(const core::Character& x);
   GCPtr<Value> Evaluate(const core::String& x);
@@ -322,6 +326,7 @@ struct Interpreter {
 
   GCPtr<Lazy> LazyEvaluate(const core::Builtin& x);
   GCPtr<Lazy> LazyEvaluate(const core::Identifier& x);
+  GCPtr<Lazy> LazyEvaluate(const core::Boolean& x);
   GCPtr<Lazy> LazyEvaluate(const core::Integer& x);
   GCPtr<Lazy> LazyEvaluate(const core::Character& x);
   GCPtr<Lazy> LazyEvaluate(const core::String& x);
@@ -342,6 +347,8 @@ struct Interpreter {
   GCPtr<Value> TryAlternative(Value*, const core::Decons&,
                               const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Detuple&,
+                              const core::Expression& x);
+  GCPtr<Value> TryAlternative(Value*, const core::Boolean&,
                               const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Integer&,
                               const core::Expression& x);
@@ -921,6 +928,9 @@ void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
 }
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
+                              const core::Boolean&) {}
+
+void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Integer&) {}
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
@@ -1034,6 +1044,10 @@ flat_set<core::Identifier> Interpreter::GetBindingsImpl(
   return flat_set(x.elements);
 }
 
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Boolean&) {
+  return {};
+}
+
 flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Integer&) {
   return {};
 }
@@ -1060,8 +1074,6 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Divide>());
     case core::Builtin::kEqual:
       return Allocate<NativeClosure>(Allocate<Equal>());
-    case core::Builtin::kFalse:
-      return Allocate<Bool>(false);
     case core::Builtin::kLessThan:
       return Allocate<NativeClosure>(Allocate<LessThan>());
     case core::Builtin::kModulo:
@@ -1080,14 +1092,16 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<ShowInt>());
     case core::Builtin::kSubtract:
       return Allocate<NativeClosure>(Allocate<Subtract>());
-    case core::Builtin::kTrue:
-      return Allocate<Bool>(true);
   }
   throw std::runtime_error(StrCat("unimplemented builtin: ", x));
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Identifier& identifier) {
   return LazyEvaluate(identifier)->Get(*this);
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::Boolean& x) {
+  return Allocate<Bool>(x.value);
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Integer& x) {
@@ -1145,6 +1159,10 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Builtin& x) {
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Identifier& identifier) {
   return GCPtr<Lazy>(*this, names.at(identifier).back());
+}
+
+GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Boolean& x) {
+  return Allocate<Lazy>(Evaluate(x));
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Integer& x) {
@@ -1209,18 +1227,6 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Builtin& b,
       } else {
         return nullptr;
       }
-    case core::Builtin::kTrue:
-      if (v->GetType() == Value::Type::kBool && v->AsBool()) {
-        return Evaluate(x);
-      } else {
-        return nullptr;
-      }
-    case core::Builtin::kFalse:
-      if (v->GetType() == Value::Type::kBool && !v->AsBool()) {
-        return Evaluate(x);
-      } else {
-        return nullptr;
-      }
     default:
       throw std::runtime_error("unsupported pattern");
   }
@@ -1260,6 +1266,14 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Detuple& d,
     names[d.elements[i]].pop_back();
   }
   return result;
+}
+
+GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Boolean& b,
+                                   const core::Expression& x) {
+  if (v->GetType() != Value::Type::kBool || v->AsBool() != b.value) {
+    return nullptr;
+  }
+  return Evaluate(x);
 }
 
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Integer& i,

@@ -330,8 +330,6 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kDivide";
     case Builtin::kEqual:
       return output << "Builtin::kEqual";
-    case Builtin::kFalse:
-      return output << "Builtin::kFalse";
     case Builtin::kLessThan:
       return output << "Builtin::kLessThan";
     case Builtin::kModulo:
@@ -350,10 +348,12 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kShowInt";
     case Builtin::kSubtract:
       return output << "Builtin::kSubtract";
-    case Builtin::kTrue:
-      return output << "Builtin::kTrue";
   }
   std::abort();
+}
+
+std::ostream& operator<<(std::ostream& output, const Boolean& x) {
+  return output << "Boolean(" << (x.value ? "true" : "false") << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Integer& x) {
