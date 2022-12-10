@@ -626,6 +626,18 @@ struct Equal : public NativeFunction<2> {
         case Value::Type::kCons:
           return Run(interpreter, l->AsCons().head, r->AsCons().head) &&
                  Run(interpreter, l->AsCons().tail, r->AsCons().tail);
+        case Value::Type::kTuple: {
+          const std::span<Lazy* const> elements_l = l->AsTuple();
+          const std::span<Lazy* const> elements_r = r->AsTuple();
+          if (elements_l.size() != elements_r.size()) {
+            throw std::runtime_error("tuple size mismatch in (==)");
+          }
+          const int n = elements_l.size();
+          for (int i = 0; i < n; i++) {
+            if (!Run(interpreter, elements_l[i], elements_r[i])) return false;
+          }
+          return true;
+        }
         default:
           throw std::runtime_error(
               StrCat("unsupported (==) comparison for ", Name(l->GetType())));
