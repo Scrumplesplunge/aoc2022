@@ -1,3 +1,12 @@
+-- type TreeHeight = Int
+-- type CoordX = Int
+-- type Coord = (Int, Int)
+-- type LabelledTree = (TreeHeight, Int, Int)
+-- type LRPair = ([LabelledTree], [LabelledTree], LabelledTree)
+-- type UDLRTuple = ([LabelledTree], [LabelledTree],
+--                   [LabelledTree], [LabelledTree],
+--                   LabelledTree)
+
 -- visibleInRow :: [LabelledTree] -> [Coord]
 visibleInRow xs = visibleInRow' (0 - 1) xs
 visibleInRow' h xs =
@@ -5,9 +14,9 @@ visibleInRow' h xs =
     [] -> []
     (x : xs') ->
       case x of
-        (h' : pos) ->
+        (h', x, y) ->
           if h' > h then
-            pos : visibleInRow' h' xs'
+            (x, y) : visibleInRow' h' xs'
           else
             visibleInRow' h xs'
 
@@ -15,14 +24,13 @@ visibleInRow' h xs =
 transpose xs = transpose' (concat (map (take 1) xs)) (map (drop 1) xs)
 transpose' x xs = if null x then [] else x : transpose xs
 
+-- labelRow :: Int -> [Int] -> [LabelledTree]
 labelRow i cs = labelRow' i 0 cs
 labelRow' i j cs =
   case cs of
     [] -> []
-    (c : cs') -> (c : i : j) : labelRow' i (j + 1) cs'
+    (c : cs') -> (c, i, j) : labelRow' i (j + 1) cs'
 
--- type Coord = CoordX : CoordY
--- type LabelledTree = (TreeHeight : Coord)
 -- label :: [[TreeHeight]] -> [[LabelledTree]]
 label rs = label' 0 rs
 label' i rs =
@@ -39,41 +47,47 @@ visibleInRows rs = nub (visibleFromLeft rs ++ visibleFromRight rs)
 visibleInColumns rs = nub (visibleFromTop rs ++ visibleFromBottom rs)
 visible rs = nub (visibleInRows rs ++ visibleInColumns rs)
 
+-- parse :: String -> [[LabelledTree]]
 parse = label . map parseRow . lines
 parseRow cs =
   case cs of
     [] -> []
     (c : cs') -> readInt [c] : parseRow cs'
 
--- fudgeRow takes a row and returns a list of pairs of lists containing the
--- trees to the left and right of each position.
-
--- type LRPair = ([LabelledTree] : [LabelledTree] : LabelledTree)
 -- fudgeRow :: [LabelledTree] -> [LRPair]
 fudgeRow cs =
   case cs of
     [] -> []
     (c : cs') -> fudgeRow' [] c cs'
+-- fudgeRow' :: [LabelledTree] -> LabelledTree -> [LabelledTree] -> [LRPair]
 fudgeRow' l x r =
   case r of
-    [] -> [(l : r : x)]
-    (x' : r') -> (l : r : x) : fudgeRow' (x : l) x' r'
--- type UDLRTuple = ([LabelledTree] : [LabelledTree] : LRPair)
--- fudge :: [[LabelledTree]] -> [UDLRTuple]
+    [] -> [(l, r, x)]
+    (x' : r') -> (l, r, x) : fudgeRow' (x : l) x' r'
+
+-- const :: a -> b -> a
 const x y = x
+
+-- prep :: [LabelledTree] -> [[LabelledTree]] -> [[LabelledTree]]
 prep r rs =
   case rs of
     [] -> map (const []) r
     (x : xs) -> transpose rs
+
+-- fudge :: [[LabelledTree]] -> [UDLRTuple]
 fudge rs =
   case rs of
     [] -> []
     (r : rs') -> fudge' [] r rs'
+-- fudge' :: [[LabelledTree]] -> [LabelledTree] -> [[LabelledTree]] ->
+--           [UDLRTuple]
 fudge' a r b =
   case b of
     [] -> combine (prep r a) (fudgeRow r) (prep r b)
     (r' : b') ->
       combine (prep r a) (fudgeRow r) (prep r b) ++ fudge' (r : a) r' b'
+-- combine :: [[LabelledTree]] -> [LabelledTree] -> [[LabelledTree]] ->
+--            [UDLRTuple]
 combine as rs bs =
   case as of
     [] -> []
@@ -81,13 +95,17 @@ combine as rs bs =
       [] -> []
       (r : rs') -> case bs of
         [] -> []
-        (b : bs') -> (a : b : r) : combine as' rs' bs'
+        (b : bs') -> case r of
+          (l, r, x) -> (a, b, l, r, x) : combine as' rs' bs'
 
+-- height :: LabelledTree -> Int
 height hxy =
   case hxy of
-    (h : xy) -> h
+    (h, x, y) -> h
 
+-- view :: Int -> [LabelledTree] -> Int
 view h ts = view' h 0 ts
+-- view' :: Int -> Int -> [LabelledTree] -> Int
 view' h n ts =
   case ts of
     [] -> n
@@ -96,14 +114,11 @@ view' h n ts =
         view' h (n + 1) ts'
       else
         n + 1
+-- score :: UDLRTuple -> Int
 score udlr =
   case udlr of
-    (u : dlrx) -> case dlrx of
-      (d : lrx) -> case lrx of
-        (l : rx) -> case rx of
-          (r : x) -> case x of
-            (h : pos) ->
-              view h u * view h d * view h l * view h r
+    (u, d, l, r, x) -> case x of
+      (h, x, y) -> view h u * view h d * view h l * view h r
 
 part1 = length . visible
 part2 = maximum . map score . fudge
