@@ -231,6 +231,30 @@ std::ostream& operator<<(std::ostream& output, const Case& x) {
   }
 }
 
+std::ostream& operator<<(std::ostream& output, const Binding& x) {
+  if (x.parameters.empty()) {
+    return output << "Binding(" << x.name << ", {}, " << x.value << ")";
+  } else {
+    output << "Binding(" << x.name << ", {" << x.parameters[0];
+    for (int i = 1, n = x.parameters.size(); i < n; i++) {
+      output << ", " << x.parameters[i];
+    }
+    return output << "}, " << x.value << ")";
+  }
+}
+
+std::ostream& operator<<(std::ostream& output, const Let& x) {
+  if (x.bindings.empty()) {
+    return output << "Let({}, " << x.value << ")";
+  } else {
+    output << "Let({" << x.bindings[0];
+    for (int i = 1, n = x.bindings.size(); i < n; i++) {
+      output << ", " << x.bindings[i];
+    }
+    return output << "}, " << x.value << ")";
+  }
+}
+
 std::ostream& operator<<(std::ostream& output, const If& x) {
   return output << "If(" << x.condition << ", " << x.then_branch << ", "
                 << x.else_branch << ")";
@@ -239,18 +263,6 @@ std::ostream& operator<<(std::ostream& output, const If& x) {
 std::ostream& operator<<(std::ostream& output, const Expression& x) {
   std::visit([&output](const auto& x) { output << x; }, x->value);
   return output;
-}
-
-std::ostream& operator<<(std::ostream& output, const Definition& x) {
-  if (x.parameters.empty()) {
-    return output << "Definition(" << x.name << ", {}, " << x.value << ")";
-  } else {
-    output << "Definition(" << x.name << ", {" << x.parameters[0];
-    for (int i = 1, n = x.parameters.size(); i < n; i++) {
-      output << ", " << x.parameters[i];
-    }
-    return output << "}, " << x.value << ")";
-  }
 }
 
 std::ostream& operator<<(std::ostream& output, const Program& x) {

@@ -175,6 +175,20 @@ struct Case {
   std::vector<Alternative> alternatives;
 };
 
+struct Binding {
+  Location location;
+  Identifier name;
+  std::vector<Identifier> parameters;
+  Expression value;
+};
+
+struct Let {
+  bool operator==(const Let&) const = default;
+  Location location;
+  std::vector<Binding> bindings;
+  Expression value;
+};
+
 struct If {
   bool operator==(const If&) const = default;
   Location location;
@@ -186,7 +200,7 @@ struct ExpressionVariant {
   std::variant<Identifier, Integer, Character, String, List, Add, Subtract,
                Multiply, Divide, Modulo, LessThan, LessOrEqual, GreaterThan,
                GreaterOrEqual, Equal, NotEqual, And, Or, Not, Cons, Concat,
-               Apply, Compose, Case, If>
+               Apply, Compose, Case, Let, If>
       value;
 };
 
@@ -204,17 +218,9 @@ inline const Location& Expression::location() const {
                     value_->value);
 }
 
-struct Definition {
-  bool operator==(const Definition&) const = default;
-  Location location;
-  Identifier name;
-  std::vector<Identifier> parameters;
-  Expression value;
-};
-
 struct Program {
   bool operator==(const Program&) const = default;
-  std::vector<Definition> definitions;
+  std::vector<Binding> definitions;
   Location end;
 };
 

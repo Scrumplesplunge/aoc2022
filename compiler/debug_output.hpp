@@ -45,9 +45,10 @@ std::ostream& operator<<(std::ostream&, const Apply&);
 std::ostream& operator<<(std::ostream&, const Compose&);
 std::ostream& operator<<(std::ostream&, const Alternative&);
 std::ostream& operator<<(std::ostream&, const Case&);
+std::ostream& operator<<(std::ostream&, const Binding&);
+std::ostream& operator<<(std::ostream&, const Let&);
 std::ostream& operator<<(std::ostream&, const If&);
 std::ostream& operator<<(std::ostream&, const Expression&);
-std::ostream& operator<<(std::ostream&, const Definition&);
 std::ostream& operator<<(std::ostream&, const Program&);
 
 }  // namespace syntax

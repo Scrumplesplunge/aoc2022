@@ -310,7 +310,7 @@ struct Checker {
   }
 
   core::Binding CheckDefinition(core::Identifier name,
-                                const syntax::Definition& definition) {
+                                const syntax::Binding& definition) {
     const auto n = names.size();
     std::vector<core::Identifier> parameters;
     for (const auto& parameter : definition.parameters) {
@@ -331,7 +331,7 @@ struct Checker {
   core::Expression Check(const syntax::Program& program) {
     struct BindingData {
       core::Identifier name;
-      const syntax::Definition* definition;
+      const syntax::Binding* definition;
     };
     std::vector<BindingData> definitions;
     for (const auto& definition : program.definitions) {

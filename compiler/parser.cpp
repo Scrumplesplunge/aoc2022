@@ -36,12 +36,12 @@ struct Parser {
         program.end = cursor[0].location;
         break;
       }
-      program.definitions.push_back(ParseDefinition());
+      program.definitions.push_back(ParseBinding());
     }
     return program;
   }
 
-  syntax::Definition ParseDefinition() {
+  syntax::Binding ParseBinding() {
     syntax::Identifier name = ParseIdentifier();
     std::vector<syntax::Identifier> parameters;
     while (!NextIs(Symbol::kEquals)) {
@@ -50,8 +50,8 @@ struct Parser {
     const Location location = cursor[0].location;
     Eat(Symbol::kEquals);
     syntax::Expression value = ParseExpression();
-    return syntax::Definition(location, std::move(name), std::move(parameters),
-                              std::move(value));
+    return syntax::Binding(location, std::move(name), std::move(parameters),
+                           std::move(value));
   }
 
   syntax::Identifier ParseIdentifier() {
