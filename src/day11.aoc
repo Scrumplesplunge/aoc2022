@@ -1,0 +1,183 @@
+skip s input =
+  case s of
+    [] -> input
+    (c : cs) ->
+      case input of
+        [] -> error ("expected '" ++ s ++ "', got eof")
+        (i : is) ->
+          if i == c then
+            skip cs is
+          else
+            error ("expected '" ++ s ++ "', got '" ++ take 3 input ++ "...'")
+
+parseInt input = parseInt' [] input
+parseInt' ds input =
+  case input of
+    [] -> finishParseInt ds input
+    (i : is) ->
+      if '0' <= i && i <= '9' then
+        parseInt' (i : ds) is
+      else
+        finishParseInt ds input
+finishParseInt ds input =
+  if null ds then
+    error ("expected number, got '" ++ take 3 input ++ "...'")
+  else
+    (readInt (reverse ds), input)
+
+seq5 a b c d e input =
+  case a input of
+    (p, input2) -> case b input2 of
+      (q, input3) -> case c input3 of
+        (r, input4) -> case d input4 of
+          (s, input5) -> case e input5 of
+            (t, input6) -> ((p, q, r, s, t), input6)
+
+prepend i pis =
+  case pis of
+    (is, input) -> (i : is, input)
+
+parseInts input =
+  case parseInt input of
+    (i, input') -> prepend i (parseInts' input')
+
+parseInts' input =
+  case input of
+    [] -> ([], input)
+    (i : is) ->
+      if i == ',' then case parseInt (skip ", " input) of
+        (i, input') -> prepend i (parseInts' input')
+      else
+        ([], input)
+
+parseItems = parseInts . skip "\n  Starting items: "
+
+add a b = a + b
+mul a b = a * b
+square x = x * x
+divisibleBy n x = x % n == 0
+
+parseOperation = parseOperation' . skip "\n  Operation: new = old "
+parseOperation' input =
+  case input of
+    [] -> error "expected operator"
+    (i : is) ->
+      if take 5 input == "* old" then
+        (square, skip "* old" input)
+      else case parseInt (skip " " is) of
+        (n, input') -> case i of
+          '+' -> (add n, input')
+          '*' -> (mul n, input')
+          x -> error "expected operator"
+
+parseTest input = parseInt (skip "\n  Test: divisible by " input)
+
+parseTrueDest = parseInt . skip "\n    If true: throw to monkey "
+parseFalseDest = parseInt . skip "\n    If false: throw to monkey "
+
+parseMonkey i = parseMonkey' . skip ("Monkey " ++ showInt i ++ ":")
+
+parseMonkeyLines =
+    seq5 parseItems parseOperation parseTest parseTrueDest parseFalseDest
+
+parseMonkey' input =
+  case parseMonkeyLines input of
+    (mi, input') -> case mi of
+      (items, op, mod, t, f) -> (((op, mod, t, f), items), input')
+
+parseMonkeys input =
+  case parseMonkey 0 input of
+    (m, input') -> prepend m (parseMonkeys' 1 input')
+parseMonkeys' n input =
+  case skip "\n" input of
+    [] -> ([], [])
+    input -> case parseMonkey n (skip "\n" input) of
+      (m, input') -> prepend m (parseMonkeys' (n + 1) input')
+
+checkEnd r =
+  case r of
+    (x, input) ->
+      if input != "" then
+        error ("expected eof, got '" ++ take 3 input ++ "...'")
+      else
+        x
+
+parseInput = splitLists . checkEnd . parseMonkeys
+splitLists = splitLists' [] [] . reverse
+splitLists' as bs ls =
+  case ls of
+    [] -> (as, bs)
+    (l : ls') -> case l of
+      (a, b) -> splitLists' (a : as) (b : bs) ls'
+
+modBy b a = a % b
+
+dispatch worryMod f monkey items = case monkey of
+  (op, mod, a, b) ->
+    let
+      p = divisibleBy mod
+      g = modBy worryMod . f . op
+    in case partition p (map g items) of
+      (as, bs) -> if a < b then [(a, as), (b, bs)] else [(b, bs), (a, as)]
+
+deliver as bs = deliver' 0 as bs
+deliver' n as bs =
+  case as of
+    [] -> bs
+    (a : as') -> case a of
+      (i, items) -> case bs of
+        [] -> error ("stuff sent to non-existent monkey " ++ showInt n ++ "!")
+        (b : bs') ->
+          if i == n then
+            (items ++ b) : deliver' (n + 1) as' bs'
+          else
+            b : deliver' (n + 1) as bs'
+
+select i xs = select' i 0 xs
+select' i n xs =
+  case xs of
+    [] -> error ("no such monkey " ++ showInt i ++ "!")
+    (x : xs') -> if i == n then x else select' i (n + 1) xs'
+
+round worryMod f ms is = round' worryMod f 0 ms [] is
+round' worryMod f n ms cs is =
+  case ms of
+    [] -> (reverse cs, is)
+    (m : ms') ->
+      let
+        items = select n is
+        other = take n is ++ [[]] ++ drop (n + 1) is
+        thrown = dispatch worryMod f m items
+        is' = deliver thrown other
+      in round' worryMod f (n + 1) ms' (length items : cs) is'
+
+zipAdd as bs =
+  case as of
+    [] -> []
+    (a : as') -> case bs of
+      [] -> []
+      (b : bs') -> a + b : zipAdd as' bs'
+
+runRounds worryMod f n ms is =
+  if n == 0 then
+    map (const 0) ms
+  else case round worryMod f ms is of
+    (cs, is') -> zipAdd cs (runRounds worryMod f (n - 1) ms is')
+
+multiply = foldl mul 1
+div3 x = x / 3
+
+getMod monkey =
+  case monkey of
+    (op, mod, t, f) -> mod
+
+worryMod = multiply . map getMod
+
+monkeyBusiness f n ms is =
+  (multiply . take 2 . reverse . sort) (runRounds (worryMod ms) f n ms is)
+part1 = monkeyBusiness div3 20
+part2 = monkeyBusiness id 10000
+
+solve input = case input of
+  (ms, is) -> showInt (part1 ms is) ++ "\n" ++ showInt (part2 ms is) ++ "\n"
+main = solve . parseInput
