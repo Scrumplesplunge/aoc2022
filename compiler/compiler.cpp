@@ -136,7 +136,7 @@ sum' n xs =
 partition p = partition' p [] []
 partition' p ls rs xs =
   case xs of
-    [] -> [ls, rs]
+    [] -> (ls, rs)
     (x : xs') ->
       if p x then
         partition' p (x : ls) rs xs'
@@ -150,8 +150,7 @@ sortBy lt xs =
     [] -> []
     (x : xs') ->
       case partition (flip lt x) xs' of
-        (ls : tmp) -> case tmp of
-          (rs : tmp2) -> sortBy lt ls ++ [x] ++ sortBy lt rs
+        (ls, rs) -> sortBy lt ls ++ [x] ++ sortBy lt rs
 
 lt a b = a < b
 
@@ -161,6 +160,16 @@ min a b = if a < b then a else b
 max a b = if a < b then b else a
 minimum xs = foldl min (head xs) (tail xs)
 maximum xs = foldl max (head xs) (tail xs)
+
+fst x = case x of
+  (a, b) -> a
+snd x = case x of
+  (a, b) -> b
+
+const x y = x
+id x = x
+
+iterate f x = x : iterate f (f x)
 )",
 };
 

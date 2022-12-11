@@ -65,9 +65,6 @@ fudgeRow' l x r =
     [] -> [(l, r, x)]
     (x' : r') -> (l, r, x) : fudgeRow' (x : l) x' r'
 
--- const :: a -> b -> a
-const x y = x
-
 -- prep :: [LabelledTree] -> [[LabelledTree]] -> [[LabelledTree]]
 prep r rs =
   case rs of
