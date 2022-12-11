@@ -28,6 +28,7 @@ enum class Builtin {
   kAnd,
   kConcat,
   kDivide,
+  kError,
   kEqual,
   kLessThan,
   kModulo,
