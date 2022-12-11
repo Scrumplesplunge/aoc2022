@@ -171,7 +171,7 @@ struct Checker {
     // a != b -> not (a == b)
     return core::Apply(
         core::Builtin::kNot,
-        core::Apply(core::Apply(core::Builtin::kAdd, std::move(a)),
+        core::Apply(core::Apply(core::Builtin::kEqual, std::move(a)),
                     std::move(b)));
   }
 
