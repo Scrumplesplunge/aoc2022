@@ -613,8 +613,8 @@ struct BinaryOperatorBool : public NativeFunction<2> {
   }
 };
 
-using And = BinaryOperatorInt64<[](bool l, bool r) { return l && r; }>;
-using Or = BinaryOperatorInt64<[](bool l, bool r) { return l || r; }>;
+using And = BinaryOperatorBool<[](bool l, bool r) { return l && r; }>;
+using Or = BinaryOperatorBool<[](bool l, bool r) { return l || r; }>;
 
 struct Equal : public NativeFunction<2> {
   bool Run(Interpreter& interpreter, Lazy* lazy_l, Lazy* lazy_r) {
@@ -679,7 +679,7 @@ struct LessThan : public NativeFunction<2> {
     }
     switch (l->GetType()) {
       case Value::Type::kChar:
-        return interpreter.Allocate<Char>(l->AsChar() < r->AsChar());
+        return interpreter.Allocate<Bool>(l->AsChar() < r->AsChar());
       case Value::Type::kInt64:
         return interpreter.Allocate<Bool>(l->AsInt64() < r->AsInt64());
       default:
