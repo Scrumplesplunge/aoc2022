@@ -854,6 +854,23 @@ struct Concat : public NativeFunction<2> {
   }
 };
 
+struct MakeError : public NativeFunction<1> {
+  GCPtr<Value> Run(Interpreter& interpreter,
+                   std::span<GCPtr<Lazy>, 1> args) override {
+    std::string message = "error: ";
+    Value* v = args[0]->Get(interpreter);
+    while (v->GetType() == Value::Type::kCons) {
+      message.push_back(v->AsCons().head->Get(interpreter)->AsChar());
+      v = v->AsCons().tail->Get(interpreter);
+    }
+    if (v->GetType() != Value::Type::kNil) {
+      throw std::runtime_error(
+          "error message is not a string (end is not nil)");
+    }
+    throw std::runtime_error(message);
+  }
+};
+
 void Lazy::MarkChildren() {
   if (has_value_) {
     value_->Mark();
@@ -1072,6 +1089,8 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Concat>());
     case core::Builtin::kDivide:
       return Allocate<NativeClosure>(Allocate<Divide>());
+    case core::Builtin::kError:
+      return Allocate<NativeClosure>(Allocate<MakeError>());
     case core::Builtin::kEqual:
       return Allocate<NativeClosure>(Allocate<Equal>());
     case core::Builtin::kLessThan:

@@ -425,6 +425,9 @@ struct Checker {
   std::map<core::Identifier, Location> locations;
   std::vector<Name> names = {
       Name{.location = kBuiltinLocation,
+           .name = "error",
+           .value = core::Builtin::kError},
+      Name{.location = kBuiltinLocation,
            .name = "readInt",
            .value = core::Builtin::kReadInt},
       Name{.location = kBuiltinLocation,
