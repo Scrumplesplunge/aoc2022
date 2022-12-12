@@ -30,13 +30,9 @@ class Error : public std::runtime_error {
 
 struct Checker {
   struct Name {
-    core::Expression AsExpression() const {
-      return std::visit([](auto x) -> core::Expression { return x; }, value);
-    }
-
     Location location;
     std::string name;
-    std::variant<core::Identifier, core::Builtin> value;
+    core::Expression value;
   };
 
   Name* TryLookup(std::string_view name) {
@@ -53,7 +49,7 @@ struct Checker {
   }
 
   core::Expression Check(const syntax::Identifier& x) {
-    return Lookup(x).AsExpression();
+    return Lookup(x).value;
   }
 
   core::Integer Check(const syntax::Integer& x) {
@@ -64,8 +60,12 @@ struct Checker {
     return core::Character(x.value);
   }
 
-  core::String Check(const syntax::String& x) {
-    return core::String(x.value);
+  core::Expression Check(const syntax::String& x) {
+    core::Expression result = nil;
+    for (int i = x.value.size() - 1; i >= 0; i--) {
+      result = Cons(core::Character(x.value[i]), std::move(result));
+    }
+    return result;
   }
 
   core::Expression Check(const syntax::List& x) {
@@ -73,9 +73,9 @@ struct Checker {
     for (const auto& element : x.elements) {
       elements.push_back(Check(element));
     }
-    core::Expression result = core::Builtin::kNil;
+    core::Expression result = nil;
     for (int i = elements.size() - 1; i >= 0; i--) {
-      result = core::Cons(elements[i], std::move(result));
+      result = Cons(std::move(elements[i]), std::move(result));
     }
     return result;
   }
@@ -195,9 +195,7 @@ struct Checker {
   }
 
   core::Expression Check(const syntax::Cons& x) {
-    core::Expression head = Check(x.head);
-    core::Expression tail = Check(x.tail);
-    return core::Cons(std::move(head), std::move(tail));
+    return Cons(Check(x.head), Check(x.tail));
   }
 
   core::Expression Check(const syntax::Concat& x) {
@@ -223,7 +221,7 @@ struct Checker {
     names.push_back(
         Name{.location = x.location, .name = x.value, .value = variable});
     core::Expression result = Check(value);
-    names.resize(n);
+    names.erase(names.begin() + n, names.end());
     return core::Case::Alternative(std::move(variable), std::move(result));
   }
 
@@ -242,7 +240,8 @@ struct Checker {
     if (x.value != "") {
       throw Error(x.location, "non-empty string patterns are unimplemented");
     }
-    return core::Case::Alternative(core::Builtin::kNil, Check(value));
+    return core::Case::Alternative(core::MatchUnion(list_type, 1, {}),
+                                   Check(value));
   }
 
   core::Case::Alternative CheckAlternativeImpl(
@@ -265,9 +264,10 @@ struct Checker {
     names.push_back(Name{
         .location = x.location, .name = tail_identifier->value, .value = tail});
     core::Expression result = Check(value);
-    names.resize(n);
+    names.erase(names.begin() + n, names.end());
     return core::Case::Alternative(
-        core::Decons(std::move(head), std::move(tail)), std::move(result));
+        core::MatchUnion(list_type, 0, {std::move(head), std::move(tail)}),
+        std::move(result));
   }
 
   core::Case::Alternative CheckAlternativeImpl(
@@ -285,8 +285,8 @@ struct Checker {
           .location = i->location, .name = i->value, .value = id});
     }
     core::Expression result = Check(value);
-    names.resize(n);
-    return core::Case::Alternative(core::Detuple(std::move(elements)),
+    names.erase(names.begin() + n, names.end());
+    return core::Case::Alternative(core::MatchTuple(std::move(elements)),
                                    std::move(result));
   }
 
@@ -295,7 +295,8 @@ struct Checker {
     if (!x.elements.empty()) {
       throw Error(x.location, "non-empty list patterns are unimplemented");
     }
-    return core::Case::Alternative(core::Builtin::kNil, Check(value));
+    return core::Case::Alternative(core::MatchUnion(list_type, 1, {}),
+                                   Check(value));
   }
 
   core::Case::Alternative CheckAlternativeImpl(const auto& x,
@@ -334,7 +335,7 @@ struct Checker {
       parameters.push_back(value);
     }
     core::Expression result = Check(definition.value);
-    names.resize(n);
+    names.erase(names.begin() + n, names.end());
     for (int i = definition.parameters.size() - 1; i >= 0; i--) {
       result = core::Lambda(parameters[i], std::move(result));
     }
@@ -367,7 +368,7 @@ struct Checker {
     }
 
     core::Expression value = Check(x.value);
-    names.resize(n);
+    names.erase(names.begin() + n, names.end());
     return core::LetRecursive(std::move(bindings), value);
   }
 
@@ -377,8 +378,9 @@ struct Checker {
                      else_branch = Check(x.else_branch);
     return core::Case(
         std::move(condition),
-        {core::Case::Alternative(core::Boolean(true), std::move(then_branch)),
-         core::Case::Alternative(core::Boolean(false),
+        {core::Case::Alternative(core::MatchUnion(bool_type, 1, {}),
+                                 std::move(then_branch)),
+         core::Case::Alternative(core::MatchUnion(bool_type, 0, {}),
                                  std::move(else_branch))});
   }
 
@@ -412,7 +414,7 @@ struct Checker {
 
     const Name* main = TryLookup("main");
     if (!main) throw Error(program.end, "no definition for main");
-    return core::LetRecursive(std::move(bindings), main->AsExpression());
+    return core::LetRecursive(std::move(bindings), main->value);
   }
 
   core::Identifier NextIdentifier(Location location) {
@@ -421,8 +423,24 @@ struct Checker {
     return next;
   }
 
+  core::Expression Cons(core::Expression head, core::Expression tail) {
+    return core::Apply(
+        core::Apply(core::UnionConstructor(list_type, 0), std::move(head)),
+        std::move(tail));
+  }
+
   int next_id = 0;
+  int next_type = 3;
   std::map<core::Identifier, Location> locations;
+  const std::shared_ptr<const core::UnionType> bool_type =
+      std::make_unique<core::UnionType>(
+          core::UnionType::Id::kBool,
+          std::vector<core::TupleType>{core::TupleType(0), core::TupleType(0)});
+  const std::shared_ptr<const core::UnionType> list_type =
+      std::make_unique<core::UnionType>(
+          core::UnionType::Id::kList,
+          std::vector<core::TupleType>{core::TupleType(2), core::TupleType(0)});
+  const core::Expression nil = core::UnionConstructor(list_type, 1);
   std::vector<Name> names = {
       Name{.location = kBuiltinLocation,
            .name = "error",

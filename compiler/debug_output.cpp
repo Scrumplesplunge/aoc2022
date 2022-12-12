@@ -297,20 +297,60 @@ std::ostream& operator<<(std::ostream& output, const Identifier& x) {
   return output << "Identifier(" << (int)x << ")";
 }
 
-std::ostream& operator<<(std::ostream& output, const Decons& x) {
-  return output << "Decons(" << x.head << ", " << x.tail << ")";
+std::ostream& operator<<(std::ostream& output, const TupleType& x) {
+  return output << "TupleType(" << x.num_members << ")";
 }
 
-std::ostream& operator<<(std::ostream& output, const Detuple& x) {
-  if (x.elements.empty()) {
-    return output << "Detuple({})";
-  } else {
-    output << "Detuple({" << x.elements[0];
+std::ostream& operator<<(std::ostream& output, const UnionType::Id& x) {
+  return output << "Id(" << (int)x << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const UnionType& x) {
+  output << "UnionType(" << x.id << ", {";
+  if (!x.alternatives.empty()) {
+    output << x.alternatives[0];
+    for (int i = 1, n = x.alternatives.size(); i < n; i++) {
+      output << ", " << x.alternatives[i];
+    }
+  }
+  return output << "})";
+}
+
+std::ostream& operator<<(std::ostream& output, const MatchTuple& x) {
+  output << "MatchTuple({";
+  if (!x.elements.empty()) {
+    output << x.elements[0];
     for (int i = 1, n = x.elements.size(); i < n; i++) {
       output << ", " << x.elements[i];
     }
-    return output << "})";
   }
+  return output << "})";
+}
+
+std::ostream& operator<<(std::ostream& output, const MatchUnion& x) {
+  output << "MatchUnion(";
+  if (x.type) {
+    output << *x.type;
+  } else {
+    output << "nullptr";
+  }
+  output << ", " << x.index << ", {";
+  if (!x.elements.empty()) {
+    output << x.elements[0];
+    for (int i = 1, n = x.elements.size(); i < n; i++) {
+      output << ", " << x.elements[i];
+    }
+  }
+  return output << "})";
+}
+
+std::ostream& operator<<(std::ostream& output, const Integer& x) {
+  return output << "Integer(" << x.value << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const Character& x) {
+  const std::string_view value(&x.value, 1);
+  return output << "Character(" << std::quoted(value, '\'') << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Pattern& x) {
@@ -338,8 +378,6 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kModulo";
     case Builtin::kMultiply:
       return output << "Builtin::kMultiply";
-    case Builtin::kNil:
-      return output << "Builtin::kNil";
     case Builtin::kNot:
       return output << "Builtin::kNot";
     case Builtin::kOr:
@@ -354,25 +392,25 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
   std::abort();
 }
 
-std::ostream& operator<<(std::ostream& output, const Boolean& x) {
-  return output << "Boolean(" << (x.value ? "true" : "false") << ")";
+std::ostream& operator<<(std::ostream& output, const Tuple& x) {
+  output << "Tuple({";
+  if (!x.elements.empty()) {
+    output << x.elements[0];
+    for (int i = 1, n = x.elements.size(); i < n; i++) {
+      output << ", " << x.elements[i];
+    }
+  }
+  return output << "})";
 }
 
-std::ostream& operator<<(std::ostream& output, const Integer& x) {
-  return output << "Integer(" << x.value << ")";
-}
-
-std::ostream& operator<<(std::ostream& output, const Character& x) {
-  const std::string_view value(&x.value, 1);
-  return output << "Character(" << std::quoted(value, '\'') << ")";
-}
-
-std::ostream& operator<<(std::ostream& output, const String& x) {
-  return output << "String(" << std::quoted(x.value) << ")";
-}
-
-std::ostream& operator<<(std::ostream& output, const Cons& x) {
-  return output << "Cons(" << x.head << ", " << x.tail << ")";
+std::ostream& operator<<(std::ostream& output, const UnionConstructor& x) {
+  output << "UnionConstructor(";
+  if (x.type) {
+    output << *x.type;
+  } else {
+    output << "nullptr";
+  }
+  return output << ", " << x.index << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Apply& x) {

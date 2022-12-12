@@ -11,6 +11,22 @@ namespace aoc2022::core {
 
 enum class Identifier : int {};
 
+struct TupleType {
+  bool operator==(const TupleType&) const = default;
+  int num_members;
+};
+
+struct UnionType {
+  enum class Id : int {
+    kBool,
+    kList,
+    kFirstUserType,
+  };
+  bool operator==(const UnionType&) const = default;
+  Id id;
+  std::vector<TupleType> alternatives;
+};
+
 struct PatternVariant;
 class Pattern {
  public:
@@ -23,37 +39,16 @@ class Pattern {
   std::shared_ptr<const PatternVariant> value_;
 };
 
-enum class Builtin {
-  kAdd,
-  kAnd,
-  kConcat,
-  kDivide,
-  kError,
-  kEqual,
-  kLessThan,
-  kModulo,
-  kMultiply,
-  kNil,
-  kNot,
-  kOr,
-  kReadInt,
-  kShowInt,
-  kSubtract,
-};
-
-struct Decons {
-  bool operator==(const Decons&) const = default;
-  Identifier head, tail;
-};
-
-struct Detuple {
-  bool operator==(const Detuple&) const = default;
+struct MatchTuple {
+  bool operator==(const MatchTuple&) const = default;
   std::vector<Identifier> elements;
 };
 
-struct Boolean {
-  bool operator==(const Boolean&) const = default;
-  bool value;
+struct MatchUnion {
+  bool operator==(const MatchUnion&) const = default;
+  std::shared_ptr<const UnionType> type;
+  int index;
+  std::vector<Identifier> elements;
 };
 
 struct Integer {
@@ -66,16 +61,9 @@ struct Character {
   char value;
 };
 
-struct String {
-  bool operator==(const String&) const = default;
-  std::string value;
-};
-
 struct PatternVariant {
   bool operator==(const PatternVariant&) const = default;
-  std::variant<Builtin, Identifier, Decons, Detuple, Boolean, Integer,
-               Character>
-      value;
+  std::variant<Identifier, MatchTuple, MatchUnion, Integer, Character> value;
 };
 
 template <HoldableBy<PatternVariant> T>
@@ -99,14 +87,32 @@ class Expression {
   std::shared_ptr<const ExpressionVariant> value_;
 };
 
-struct Cons {
-  bool operator==(const Cons&) const = default;
-  Expression head, tail;
+enum class Builtin {
+  kAdd,
+  kAnd,
+  kConcat,
+  kDivide,
+  kError,
+  kEqual,
+  kLessThan,
+  kModulo,
+  kMultiply,
+  kNot,
+  kOr,
+  kReadInt,
+  kShowInt,
+  kSubtract,
 };
 
 struct Tuple {
   bool operator==(const Tuple&) const = default;
   std::vector<Expression> elements;
+};
+
+struct UnionConstructor {
+  bool operator==(const UnionConstructor&) const = default;
+  std::shared_ptr<const UnionType> type;
+  int index;
 };
 
 struct Apply {
@@ -152,8 +158,8 @@ struct Case {
 
 struct ExpressionVariant {
   bool operator==(const ExpressionVariant&) const = default;
-  std::variant<Builtin, Identifier, Boolean, Integer, Character, String, Cons,
-               Tuple, Apply, Lambda, Let, LetRecursive, Case>
+  std::variant<Builtin, Identifier, Integer, Character, Tuple, UnionConstructor,
+               Apply, Lambda, Let, LetRecursive, Case>
       value;
 };
 

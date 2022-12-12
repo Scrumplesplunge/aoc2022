@@ -22,13 +22,13 @@ std::string StrCat(const auto&... args) {
 struct Node {
   virtual ~Node() = default;
 
-  void Mark() {
+  void Mark(std::vector<Node*>& frontier) {
     if (reachable) return;
     reachable = true;
-    MarkChildren();
+    AddChildren(frontier);
   }
 
-  virtual void MarkChildren() = 0;
+  virtual void AddChildren(std::vector<Node*>& frontier) = 0;
 
   bool reachable = false;
 };
@@ -37,7 +37,7 @@ struct Value;
 struct Interpreter;
 
 struct GCPtrBase {
-  virtual void Mark() = 0;
+  virtual void Mark(std::vector<Node*>& frontier) = 0;
   GCPtrBase* prev;
   GCPtrBase* next;
 };
@@ -54,7 +54,14 @@ class GCPtr : public GCPtrBase {
   GCPtr(const GCPtr& other) : GCPtr(*other.interpreter_, other.value_) {}
   GCPtr& operator=(const GCPtr& other);
 
-  void Mark() override { if (value_) value_->Mark(); }
+  GCPtr& operator=(T* value) {
+    value_ = value;
+    return *this;
+  }
+
+  void Mark(std::vector<Node*>& frontier) override {
+    if (value_) value_->Mark(frontier);
+  }
 
   ~GCPtr();
 
@@ -74,20 +81,15 @@ class GCPtr : public GCPtrBase {
 };
 
 class Lazy;
-struct ConsData {
-  Lazy* head;
-  Lazy* tail;
-};
+class Union;
 
 struct Value : public Node {
   enum class Type {
-    kBool,
     kInt64,
     kChar,
-    kCons,
-    kNil,
     kLambda,
     kTuple,
+    kUnion,
   };
 
   virtual Type GetType() const = 0;
@@ -95,8 +97,8 @@ struct Value : public Node {
   bool AsBool() const;
   std::int64_t AsInt64() const;
   char AsChar() const;
-  const ConsData& AsCons() const;
   std::span<Lazy* const> AsTuple() const;
+  const Union& AsUnion() const;
   void Enter(Interpreter&);
 };
 
@@ -120,7 +122,7 @@ class Lazy final : public Node {
     }
     return GCPtr<Value>(interpreter, value_);
   }
-  void MarkChildren() override;
+  void AddChildren(std::vector<Node*>& frontier) override;
  private:
   bool has_value_;
   bool computing_ = false;
@@ -268,6 +270,11 @@ struct Interpreter {
     }
   }
 
+  GCPtr<Value> Nil();
+  GCPtr<Value> Cons(Lazy* head, Lazy* tail);
+  GCPtr<Value> Bool(bool value);
+  std::string EvaluateString(GCPtr<Lazy> list);
+
   void CollectGarbage();
 
   using Captures = flat_map<core::Identifier, Lazy*>;
@@ -276,16 +283,13 @@ struct Interpreter {
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Identifier& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
-                   const core::Boolean& x);
-  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Integer& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Character& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
-                   const core::String& x);
-  void ResolveImpl(flat_set<core::Identifier>&, Captures&, const core::Cons& x);
-  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Tuple& x);
+  void ResolveImpl(flat_set<core::Identifier>&, Captures&,
+                   const core::UnionConstructor& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
                    const core::Apply& x);
   void ResolveImpl(flat_set<core::Identifier>&, Captures&,
@@ -300,23 +304,19 @@ struct Interpreter {
                const core::Expression& x);
   Captures Resolve(const core::Expression& x);
 
-  flat_set<core::Identifier> GetBindingsImpl(const core::Builtin&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Identifier&);
-  flat_set<core::Identifier> GetBindingsImpl(const core::Decons&);
-  flat_set<core::Identifier> GetBindingsImpl(const core::Detuple&);
-  flat_set<core::Identifier> GetBindingsImpl(const core::Boolean&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::MatchTuple&);
+  flat_set<core::Identifier> GetBindingsImpl(const core::MatchUnion&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Integer&);
   flat_set<core::Identifier> GetBindingsImpl(const core::Character&);
   flat_set<core::Identifier> GetBindings(const core::Pattern&);
 
   GCPtr<Value> Evaluate(const core::Builtin& x);
   GCPtr<Value> Evaluate(const core::Identifier& x);
-  GCPtr<Value> Evaluate(const core::Boolean& x);
   GCPtr<Value> Evaluate(const core::Integer& x);
   GCPtr<Value> Evaluate(const core::Character& x);
-  GCPtr<Value> Evaluate(const core::String& x);
-  GCPtr<Value> Evaluate(const core::Cons& x);
   GCPtr<Value> Evaluate(const core::Tuple& x);
+  GCPtr<Value> Evaluate(const core::UnionConstructor& x);
   GCPtr<Value> Evaluate(const core::Apply& x);
   GCPtr<Value> Evaluate(const core::Lambda& x);
   GCPtr<Value> Evaluate(const core::Let& x);
@@ -326,12 +326,10 @@ struct Interpreter {
 
   GCPtr<Lazy> LazyEvaluate(const core::Builtin& x);
   GCPtr<Lazy> LazyEvaluate(const core::Identifier& x);
-  GCPtr<Lazy> LazyEvaluate(const core::Boolean& x);
   GCPtr<Lazy> LazyEvaluate(const core::Integer& x);
   GCPtr<Lazy> LazyEvaluate(const core::Character& x);
-  GCPtr<Lazy> LazyEvaluate(const core::String& x);
-  GCPtr<Lazy> LazyEvaluate(const core::Cons& x);
   GCPtr<Lazy> LazyEvaluate(const core::Tuple& x);
+  GCPtr<Lazy> LazyEvaluate(const core::UnionConstructor& x);
   GCPtr<Lazy> LazyEvaluate(const core::Apply& x);
   GCPtr<Lazy> LazyEvaluate(const core::Lambda& x);
   GCPtr<Lazy> LazyEvaluate(const core::Let& x);
@@ -340,15 +338,11 @@ struct Interpreter {
   GCPtr<Lazy> LazyEvaluate(const core::Expression& x);
 
   GCPtr<Value> TryAlternative(Value*, const core::Case::Alternative& x);
-  GCPtr<Value> TryAlternative(Value*, const core::Builtin&,
-                              const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Identifier&,
                               const core::Expression& x);
-  GCPtr<Value> TryAlternative(Value*, const core::Decons&,
+  GCPtr<Value> TryAlternative(Value*, const core::MatchTuple&,
                               const core::Expression& x);
-  GCPtr<Value> TryAlternative(Value*, const core::Detuple&,
-                              const core::Expression& x);
-  GCPtr<Value> TryAlternative(Value*, const core::Boolean&,
+  GCPtr<Value> TryAlternative(Value*, const core::MatchUnion&,
                               const core::Expression& x);
   GCPtr<Value> TryAlternative(Value*, const core::Integer&,
                               const core::Expression& x);
@@ -388,72 +382,61 @@ GCPtr<T>::~GCPtr() {
 
 const char* Name(Value::Type t) {
   switch (t) {
-    case Value::Type::kBool:
-      return "bool";
     case Value::Type::kInt64:
       return "int64";
     case Value::Type::kChar:
       return "char";
-    case Value::Type::kCons:
-      return "cons";
-    case Value::Type::kNil:
-      return "nil";
     case Value::Type::kLambda:
       return "lambda";
     case Value::Type::kTuple:
       return "tuple";
+    case Value::Type::kUnion:
+      return "union";
   }
   std::abort();
 }
 
-struct Bool final : public Value {
-  Bool(bool value) : value(value) {}
-  Type GetType() const override { return Type::kBool; }
-  void MarkChildren() override {}
-  bool value;
-};
-
 struct Int64 final : public Value {
   Int64(std::int64_t value) : value(value) {}
   Type GetType() const override { return Type::kInt64; }
-  void MarkChildren() override {}
+  void AddChildren(std::vector<Node*>& frontier) override {}
   std::int64_t value;
 };
 
 struct Char final : public Value {
   Char(char value) : value(value) {}
   Type GetType() const override { return Type::kChar; }
-  void MarkChildren() override {}
+  void AddChildren(std::vector<Node*>& frontier) override {}
   char value;
-};
-
-struct Cons final : public Value {
-  Cons(Lazy* head, Lazy* tail) : data{.head = head, .tail = tail} {}
-  Type GetType() const override { return Type::kCons; }
-  void MarkChildren() override {
-    data.head->Mark();
-    data.tail->Mark();
-  }
-  ConsData data;
 };
 
 struct Tuple final : public Value {
   Type GetType() const override { return Type::kTuple; }
-  void MarkChildren() override {
-    for (auto& element : elements) element->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    frontier.insert(frontier.end(), elements.begin(), elements.end());
   }
   std::vector<Lazy*> elements;
 };
 
-struct Nil final : public Value {
-  Type GetType() const override { return Type::kNil; }
-  void MarkChildren() override {}
+struct Union final : public Value {
+  Union(core::UnionType::Id type_id, int index,
+        std::span<Lazy* const> elements = {})
+      : type_id(type_id),
+        index(index),
+        elements(elements.begin(), elements.end()) {}
+  Type GetType() const override { return Type::kUnion; }
+  void AddChildren(std::vector<Node*>& frontier) override {
+    frontier.insert(frontier.end(), elements.begin(), elements.end());
+  }
+  core::UnionType::Id type_id;
+  int index;
+  std::vector<Lazy*> elements;
 };
 
 struct Closure : public Thunk {
   Closure(Interpreter::Captures captures) : captures(std::move(captures)) {}
-  void MarkChildren() override {
-    for (const auto& [id, value] : captures) value->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    for (const auto& [id, value] : captures) frontier.push_back(value);
   }
   virtual GCPtr<Value> RunBody(Interpreter&) = 0;
   GCPtr<Value> Run(Interpreter& interpreter) final {
@@ -485,7 +468,7 @@ struct Let final : public Closure {
 
 struct Error final : public Thunk {
   Error(std::string message) : message(std::move(message)) {}
-  void MarkChildren() override {}
+  void AddChildren(std::vector<Node*>&) override {}
   GCPtr<Value> Run(Interpreter&) override {
     throw std::runtime_error(message);
   }
@@ -556,8 +539,23 @@ struct Lambda : public Value {
 struct NativeFunctionBase : public Node {
   NativeFunctionBase(int arity) : arity(arity) {}
   virtual void Enter(Interpreter& interpreter) = 0;
-  void MarkChildren() override {}
+  void AddChildren(std::vector<Node*>&) override {}
   const int arity;
+};
+
+struct UnionConstructor final : public NativeFunctionBase {
+  UnionConstructor(const core::UnionConstructor& x)
+      : NativeFunctionBase(x.type->alternatives.at(x.index).num_members),
+        type_id(x.type->id),
+        index(x.index) {}
+  void Enter(Interpreter& interpreter) override {
+    GCPtr<Lazy> value = interpreter.Allocate<Lazy>(interpreter.Allocate<Union>(
+        type_id, index, std::span<Lazy*>(interpreter.stack).last(arity)));
+    interpreter.stack.resize(interpreter.stack.size() - arity + 1);
+    interpreter.stack.back() = value;
+  }
+  core::UnionType::Id type_id;
+  int index;
 };
 
 template <int n>
@@ -583,7 +581,7 @@ struct NativeFunction : public NativeFunctionBase {
 struct Not : public NativeFunction<1> {
   GCPtr<Value> Run(Interpreter& interpreter,
                    std::span<GCPtr<Lazy>, 1> args) override {
-    return interpreter.Allocate<Bool>(!args[0]->Get(interpreter)->AsBool());
+    return interpreter.Bool(!args[0]->Get(interpreter)->AsBool());
   }
 };
 
@@ -609,7 +607,7 @@ struct BinaryOperatorBool : public NativeFunction<2> {
              std::span<GCPtr<Lazy>, 2> args) override {
     GCPtr<Value> l = args[0]->Get(interpreter);
     GCPtr<Value> r = args[1]->Get(interpreter);
-    return interpreter.Allocate<Bool>(F(l->AsBool(), r->AsBool()));
+    return interpreter.Bool(F(l->AsBool(), r->AsBool()));
   }
 };
 
@@ -622,17 +620,10 @@ struct Equal : public NativeFunction<2> {
     GCPtr<Value> r = lazy_r->Get(interpreter);
     if (l->GetType() == r->GetType()) {
       switch (l->GetType()) {
-        case Value::Type::kNil:
-          return true;
-        case Value::Type::kBool:
-          return l->AsBool() == r->AsBool();
         case Value::Type::kChar:
           return l->AsChar() == r->AsChar();
         case Value::Type::kInt64:
           return l->AsInt64() == r->AsInt64();
-        case Value::Type::kCons:
-          return Run(interpreter, l->AsCons().head, r->AsCons().head) &&
-                 Run(interpreter, l->AsCons().tail, r->AsCons().tail);
         case Value::Type::kTuple: {
           const std::span<Lazy* const> elements_l = l->AsTuple();
           const std::span<Lazy* const> elements_r = r->AsTuple();
@@ -645,15 +636,32 @@ struct Equal : public NativeFunction<2> {
           }
           return true;
         }
+        case Value::Type::kUnion: {
+          const Union& union_l = l->AsUnion();
+          const Union& union_r = r->AsUnion();
+          if (union_l.type_id != union_r.type_id) {
+            throw std::runtime_error(
+                StrCat("unsupported (==) comparison between ", union_l.type_id,
+                       " and ", union_r.type_id));
+          }
+          if (union_l.index != union_r.index) return false;
+          if (union_l.elements.size() != union_r.elements.size()) {
+            throw std::logic_error(StrCat(
+                "mismatched size for object of type ", union_l.type_id,
+                ", constructor ", union_l.index, ": ", union_l.elements.size(),
+                " vs ", union_r.elements.size()));
+          }
+          for (int i = 0, n = union_l.elements.size(); i < n; i++) {
+            if (!Run(interpreter, union_l.elements[i], union_r.elements[i])) {
+              return false;
+            }
+          }
+          return true;
+        }
         default:
           throw std::runtime_error(
               StrCat("unsupported (==) comparison for ", Name(l->GetType())));
       }
-    } else if ((l->GetType() == Value::Type::kCons &&
-                r->GetType() == Value::Type::kNil) ||
-               (l->GetType() == Value::Type::kNil &&
-                r->GetType() == Value::Type::kCons)) {
-      return false;
     } else {
       throw std::runtime_error(StrCat("unsupported (==) comparison between ",
                                       Name(l->GetType()), " and ",
@@ -662,8 +670,7 @@ struct Equal : public NativeFunction<2> {
   }
   GCPtr<Value> Run(Interpreter& interpreter,
                    std::span<GCPtr<Lazy>, 2> args) override {
-    return interpreter.Allocate<Bool>(
-        Run(interpreter, args[0], args[1]));
+    return interpreter.Bool(Run(interpreter, args[0], args[1]));
   }
 };
 
@@ -679,9 +686,9 @@ struct LessThan : public NativeFunction<2> {
     }
     switch (l->GetType()) {
       case Value::Type::kChar:
-        return interpreter.Allocate<Bool>(l->AsChar() < r->AsChar());
+        return interpreter.Bool(l->AsChar() < r->AsChar());
       case Value::Type::kInt64:
-        return interpreter.Allocate<Bool>(l->AsInt64() < r->AsInt64());
+        return interpreter.Bool(l->AsInt64() < r->AsInt64());
       default:
         throw std::runtime_error(
             StrCat("unsupported (<) comparison for ", Name(l->GetType())));
@@ -694,9 +701,9 @@ struct ShowInt : public NativeFunction<1> {
                    std::span<GCPtr<Lazy>, 1> args) override {
     const std::int64_t value = args[0]->Get(interpreter)->AsInt64();
     std::string text = std::to_string(value);
-    GCPtr<Value> result = interpreter.Allocate<Nil>();
+    GCPtr<Value> result = interpreter.Nil();
     for (int i = text.size() - 1; i >= 0; i--) {
-      result = interpreter.Allocate<Cons>(
+      result = interpreter.Cons(
           interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(text[i])),
           interpreter.Allocate<Lazy>(result));
     }
@@ -707,20 +714,13 @@ struct ShowInt : public NativeFunction<1> {
 struct ReadInt : public NativeFunction<1> {
   GCPtr<Value> Run(Interpreter& interpreter,
                    std::span<GCPtr<Lazy>, 1> args) override {
-    std::string text;
-    Lazy* list = args[0];
-    while (true) {
-      GCPtr<Value> v = list->Get(interpreter);
-      if (v->GetType() == Value::Type::kNil) break;
-      auto& cons = v->AsCons();
-      GCPtr<Value> head = cons.head->Get(interpreter);
-      text.push_back(head->AsChar());
-      list = cons.tail;
-    }
+    const std::string text = interpreter.EvaluateString(args[0]);
     std::int64_t value;
     auto [p, error] = std::from_chars(text.data(), text.data() + text.size(),
                                       value);
-    if (error != std::errc()) throw std::runtime_error("bad int in string");
+    if (error != std::errc()) {
+      throw std::runtime_error("bad int in string: " + text);
+    }
     return interpreter.Allocate<Int64>(value);
   }
 };
@@ -732,9 +732,9 @@ struct NativeClosure : public Lambda {
       throw std::logic_error("creating (over)saturated native closure");
     }
   }
-  void MarkChildren() override {
-    f->Mark();
-    for (const auto& b : bound) b->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    frontier.push_back(f);
+    frontier.insert(frontier.end(), bound.begin(), bound.end());
   }
   void Enter(Interpreter& interpreter) override {
     const int required = f->arity - bound.size();
@@ -768,8 +768,8 @@ struct UserLambda final : public Lambda {
       interpreter.names[id].pop_back();
     }
   }
-  void MarkChildren() override {
-    for (const auto& [id, value] : captures) value->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    for (const auto& [id, value] : captures) frontier.push_back(value);
   }
   const core::Lambda& definition;
   Interpreter::Captures captures;
@@ -777,9 +777,9 @@ struct UserLambda final : public Lambda {
 
 struct Apply final : public Thunk {
   Apply(Lazy* f, Lazy* x) : f(f), x(x) {}
-  void MarkChildren() override {
-    f->Mark();
-    x->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    frontier.push_back(f);
+    frontier.push_back(x);
   }
   GCPtr<Value> Run(Interpreter& interpreter) override {
     interpreter.stack.push_back(x);
@@ -793,54 +793,44 @@ struct Apply final : public Thunk {
 };
 
 struct Read final : public Thunk {
-  void MarkChildren() override {}
+  void AddChildren(std::vector<Node*>&) override {}
   GCPtr<Value> Run(Interpreter& interpreter) override {
     char c;
     if (std::cin.get(c)) {
-      return interpreter.Allocate<Cons>(
+      return interpreter.Cons(
           interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(c)),
           interpreter.Allocate<Lazy>(this));
     } else {
-      return interpreter.Allocate<Nil>();
+      return interpreter.Nil();
     }
   }
-};
-
-struct StringTail final : public Thunk {
-  StringTail(std::string_view tail) : tail(tail) {}
-  GCPtr<Value> Run(Interpreter& interpreter) override {
-    if (tail.empty()) {
-      return interpreter.Allocate<Nil>();
-    } else {
-      const char head = tail.front();
-      tail.remove_prefix(1);
-      return interpreter.Allocate<Cons>(
-          interpreter.Allocate<Lazy>(interpreter.Allocate<Char>(head)),
-          interpreter.Allocate<Lazy>(this));
-    }
-  }
-  void MarkChildren() override {}
-  std::string_view tail;
 };
 
 struct ConcatThunk final : public Thunk {
   ConcatThunk(Lazy* l, Lazy* r) : l(l), r(r) {}
   GCPtr<Value> Run(Interpreter& interpreter) override {
     GCPtr<Value> v = l->Get(interpreter);
-    if (v->GetType() == Value::Type::kCons) {
-      const auto& cons = v->AsCons();
-      l = cons.tail;
-      return interpreter.Allocate<Cons>(cons.head,
-                                        interpreter.Allocate<Lazy>(this));
-    } else if (v->GetType() == Value::Type::kNil) {
+    if (v->GetType() != Value::Type::kUnion) {
+      throw std::runtime_error(StrCat("malformed string: tail is ",
+                                      Name(v->GetType()), ", not list"));
+    }
+    const Union& u = v->AsUnion();
+    if (u.type_id != core::UnionType::Id::kList) {
+      throw std::runtime_error(
+          StrCat("malformed string: tail is ", u.type_id, ", not list"));
+    }
+    if (u.index == 0) {
+      l = u.elements[1];
+      return interpreter.Cons(u.elements[0], interpreter.Allocate<Lazy>(this));
+    } else if (u.index == 1) {
       return r->Get(interpreter);
     } else {
       throw std::runtime_error("concat argument is not a list");
     }
   }
-  void MarkChildren() override {
-    l->Mark();
-    r->Mark();
+  void AddChildren(std::vector<Node*>& frontier) override {
+    frontier.push_back(l);
+    frontier.push_back(r);
   }
   Lazy* l;
   Lazy* r;
@@ -857,31 +847,24 @@ struct Concat : public NativeFunction<2> {
 struct MakeError : public NativeFunction<1> {
   GCPtr<Value> Run(Interpreter& interpreter,
                    std::span<GCPtr<Lazy>, 1> args) override {
-    std::string message = "error: ";
-    Value* v = args[0]->Get(interpreter);
-    while (v->GetType() == Value::Type::kCons) {
-      message.push_back(v->AsCons().head->Get(interpreter)->AsChar());
-      v = v->AsCons().tail->Get(interpreter);
-    }
-    if (v->GetType() != Value::Type::kNil) {
-      throw std::runtime_error(
-          "error message is not a string (end is not nil)");
-    }
-    throw std::runtime_error(message);
+    throw std::runtime_error("error: " + interpreter.EvaluateString(args[0]));
   }
 };
 
-void Lazy::MarkChildren() {
+void Lazy::AddChildren(std::vector<Node*>& frontier) {
   if (has_value_) {
-    value_->Mark();
+    frontier.push_back(value_);
   } else {
-    thunk_->Mark();
+    frontier.push_back(thunk_);
   }
 }
 
 bool Value::AsBool() const {
-  if (GetType() != Type::kBool) throw std::runtime_error("not a bool");
-  return static_cast<const Bool*>(this)->value;
+  if (GetType() != Type::kUnion ||
+      AsUnion().type_id != core::UnionType::Id::kBool) {
+    throw std::runtime_error("not a bool");
+  }
+  return AsUnion().index;
 }
 
 std::int64_t Value::AsInt64() const {
@@ -894,14 +877,14 @@ char Value::AsChar() const {
   return static_cast<const Char*>(this)->value;
 }
 
-const ConsData& Value::AsCons() const {
-  if (GetType() != Type::kCons) throw std::runtime_error("not a cons node");
-  return static_cast<const Cons*>(this)->data;
-}
-
 std::span<Lazy* const> Value::AsTuple() const {
   if (GetType() != Type::kTuple) throw std::runtime_error("not a tuple");
   return static_cast<const Tuple*>(this)->elements;
+}
+
+const Union& Value::AsUnion() const {
+  if (GetType() != Type::kUnion) throw std::runtime_error("not a union");
+  return *static_cast<const Union*>(this);
 }
 
 void Value::Enter(Interpreter& interpreter) {
@@ -919,16 +902,63 @@ GCPtr<T> Interpreter::Allocate(Args&&... args) {
   return p;
 }
 
+GCPtr<Value> Interpreter::Nil() {
+  return Allocate<Union>(core::UnionType::Id::kList, 1);
+}
+
+GCPtr<Value> Interpreter::Cons(Lazy* head, Lazy* tail) {
+  return Allocate<Union>(core::UnionType::Id::kList, 0,
+                         std::span<Lazy* const>({head, tail}));
+}
+
+GCPtr<Value> Interpreter::Bool(bool value) {
+  return Allocate<Union>(core::UnionType::Id::kBool, value ? 1 : 0);
+}
+
+std::string Interpreter::EvaluateString(GCPtr<Lazy> list) {
+  std::string text;
+  while (true) {
+    GCPtr<Value> v = list->Get(*this);
+    if (v->GetType() != Value::Type::kUnion) {
+      throw std::runtime_error(StrCat("malformed string: tail is ",
+                                      Name(v->GetType()), ", not list"));
+    }
+    const Union& u = v->AsUnion();
+    if (u.type_id != core::UnionType::Id::kList) {
+      throw std::runtime_error(
+          StrCat("malformed string: tail is ", u.type_id, ", not list"));
+    }
+    if (u.index == 1) break;
+    if (u.elements.size() != 2) {
+      throw std::logic_error("corrupt cons in string");
+    }
+    GCPtr<Value> head = u.elements[0]->Get(*this);
+    text.push_back(head->AsChar());
+    list = u.elements[1];
+  }
+  return text;
+}
+
 void Interpreter::CollectGarbage() {
   for (auto& node : heap) node->reachable = false;
+  std::vector<Node*> frontier;
+  auto dfs = [&frontier](auto* n) {
+    frontier.clear();
+    n->Mark(frontier);
+    while (!frontier.empty()) {
+      Node* n = frontier.back();
+      frontier.pop_back();
+      n->Mark(frontier);
+    }
+  };
   for (auto& [name, nodes] : names) {
-    for (auto& node : nodes) node->Mark();
+    for (const auto& node : nodes) dfs(node);
   }
-  for (auto& node : stack) node->Mark();
+  for (auto& node : stack) dfs(node);
   if (live) {
     GCPtrBase* i = live;
     do {
-      i->Mark();
+      dfs(i);
       i = i->next;
     } while (i != live);
   }
@@ -945,23 +975,10 @@ void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
 }
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
-                              const core::Boolean&) {}
-
-void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Integer&) {}
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
                               const core::Character&) {}
-
-void Interpreter::ResolveImpl(flat_set<core::Identifier>&, Captures&,
-                              const core::String&) {}
-
-void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
-                              Captures& result,
-                              const core::Cons& x) {
-  Resolve(bound, result, x.head);
-  Resolve(bound, result, x.tail);
-}
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result,
@@ -970,6 +987,10 @@ void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
     Resolve(bound, result, element);
   }
 }
+
+void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
+                              Captures& result,
+                              const core::UnionConstructor& x) {}
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Apply& x) {
@@ -1043,26 +1064,19 @@ Interpreter::Captures Interpreter::Resolve(const core::Expression& x) {
   return result;
 }
 
-flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Builtin&) {
-  return {};
-}
-
 flat_set<core::Identifier> Interpreter::GetBindingsImpl(
     const core::Identifier& x) {
   return {x};
 }
 
-flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Decons& x) {
-  return {x.head, x.tail};
+flat_set<core::Identifier> Interpreter::GetBindingsImpl(
+    const core::MatchTuple& x) {
+  return flat_set<core::Identifier>(x.elements);
 }
 
 flat_set<core::Identifier> Interpreter::GetBindingsImpl(
-    const core::Detuple& x) {
-  return flat_set(x.elements);
-}
-
-flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Boolean&) {
-  return {};
+    const core::MatchUnion& x) {
+  return flat_set<core::Identifier>(x.elements);
 }
 
 flat_set<core::Identifier> Interpreter::GetBindingsImpl(const core::Integer&) {
@@ -1099,8 +1113,6 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Modulo>());
     case core::Builtin::kMultiply:
       return Allocate<NativeClosure>(Allocate<Multiply>());
-    case core::Builtin::kNil:
-      return Allocate<Nil>();
     case core::Builtin::kNot:
       return Allocate<NativeClosure>(Allocate<Not>());
     case core::Builtin::kOr:
@@ -1119,10 +1131,6 @@ GCPtr<Value> Interpreter::Evaluate(const core::Identifier& identifier) {
   return LazyEvaluate(identifier)->Get(*this);
 }
 
-GCPtr<Value> Interpreter::Evaluate(const core::Boolean& x) {
-  return Allocate<Bool>(x.value);
-}
-
 GCPtr<Value> Interpreter::Evaluate(const core::Integer& x) {
   return Allocate<Int64>(x.value);
 }
@@ -1131,20 +1139,21 @@ GCPtr<Value> Interpreter::Evaluate(const core::Character& x) {
   return Allocate<Char>(x.value);
 }
 
-GCPtr<Value> Interpreter::Evaluate(const core::String& x) {
-  return LazyEvaluate(x)->Get(*this);
-}
-
-GCPtr<Value> Interpreter::Evaluate(const core::Cons& x) {
-  return Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail));
-}
-
 GCPtr<Value> Interpreter::Evaluate(const core::Tuple& x) {
   GCPtr<Tuple> tuple = Allocate<Tuple>();
   for (const auto& element : x.elements) {
     tuple->elements.push_back(LazyEvaluate(element));
   }
   return tuple;
+}
+
+GCPtr<Value> Interpreter::Evaluate(const core::UnionConstructor& x) {
+  const int arity = x.type->alternatives.at(x.index).num_members;
+  if (arity == 0) {
+    return Allocate<Union>(x.type->id, x.index);
+  } else {
+    return Allocate<NativeClosure>(Allocate<UnionConstructor>(x));
+  }
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Apply& x) {
@@ -1180,10 +1189,6 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Identifier& identifier) {
   return GCPtr<Lazy>(*this, names.at(identifier).back());
 }
 
-GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Boolean& x) {
-  return Allocate<Lazy>(Evaluate(x));
-}
-
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Integer& x) {
   return Allocate<Lazy>(Evaluate(x));
 }
@@ -1192,16 +1197,11 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Character& x) {
   return Allocate<Lazy>(Evaluate(x));
 }
 
-GCPtr<Lazy> Interpreter::LazyEvaluate(const core::String& x) {
-  return Allocate<Lazy>(Allocate<StringTail>(x.value));
-}
-
-GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Cons& x) {
-  return Allocate<Lazy>(
-      Allocate<Cons>(LazyEvaluate(x.head), LazyEvaluate(x.tail)));
-}
-
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Tuple& x) {
+  return Allocate<Lazy>(Evaluate(x));
+}
+
+GCPtr<Lazy> Interpreter::LazyEvaluate(const core::UnionConstructor& x) {
   return Allocate<Lazy>(Evaluate(x));
 }
 
@@ -1237,20 +1237,6 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v,
       x.pattern->value);
 }
 
-GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Builtin& b,
-                                   const core::Expression& x) {
-  switch (b) {
-    case core::Builtin::kNil:
-      if (v->GetType() == Value::Type::kNil) {
-        return Evaluate(x);
-      } else {
-        return nullptr;
-      }
-    default:
-      throw std::runtime_error("unsupported pattern");
-  }
-}
-
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Identifier& i,
                                    const core::Expression& x) {
   names[i].push_back(Allocate<Lazy>(v));
@@ -1259,23 +1245,18 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Identifier& i,
   return result;
 }
 
-GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Decons& d,
-                                   const core::Expression& x) {
-  if (v->GetType() != Value::Type::kCons) return nullptr;
-  const auto& cons = v->AsCons();
-  names[d.head].push_back(cons.head);
-  names[d.tail].push_back(cons.tail);
-  GCPtr<Value> result = Evaluate(x);
-  names[d.head].pop_back();
-  names[d.tail].pop_back();
-  return result;
-}
-
-GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Detuple& d,
+GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::MatchTuple& d,
                                          const core::Expression& x) {
-  if (v->GetType() != Value::Type::kTuple) return nullptr;
+  if (v->GetType() != Value::Type::kTuple) {
+    throw std::runtime_error(StrCat("attempting to match ", Name(v->GetType()),
+                                    " with tuple pattern"));
+  }
   std::span<Lazy* const> elements = v->AsTuple();
-  if (elements.size() != d.elements.size()) return nullptr;
+  if (elements.size() != d.elements.size()) {
+    throw std::runtime_error(
+        StrCat("attempting to match tuple of size ", elements.size(),
+               " with tuple pattern of size ", d.elements.size()));
+  }
   const int n = elements.size();
   for (int i = 0; i < n; i++) {
     names[d.elements[i]].push_back(elements[i]);
@@ -1287,12 +1268,33 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Detuple& d,
   return result;
 }
 
-GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Boolean& b,
-                                   const core::Expression& x) {
-  if (v->GetType() != Value::Type::kBool || v->AsBool() != b.value) {
-    return nullptr;
+GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::MatchUnion& d,
+                                         const core::Expression& x) {
+  if (v->GetType() != Value::Type::kUnion) {
+    throw std::runtime_error(StrCat("attempting to match ", Name(v->GetType()),
+                                    " with type constructor"));
   }
-  return Evaluate(x);
+  const Union& value = v->AsUnion();
+  if (value.type_id != d.type->id) {
+    throw std::runtime_error(
+        StrCat("attempting to match value of type ", value.type_id,
+               " with type constructor for type ", d.type->id));
+  }
+  if (value.index != d.index) return nullptr;
+  if (value.elements.size() != d.elements.size()) {
+    throw std::logic_error(StrCat(
+        "mismatch in cardinality for constructor ", value.index, " in type ",
+        value.type_id, ": ", value.elements.size(), " vs ", d.elements.size()));
+  }
+  const int n = value.elements.size();
+  for (int i = 0; i < n; i++) {
+    names[d.elements[i]].push_back(value.elements[i]);
+  }
+  GCPtr<Value> result = Evaluate(x);
+  for (int i = 0; i < n; i++) {
+    names[d.elements[i]].pop_back();
+  }
+  return result;
 }
 
 GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Integer& i,
@@ -1316,15 +1318,19 @@ void Interpreter::Run(const core::Expression& program) {
       Allocate<Apply>(LazyEvaluate(program), Allocate<Lazy>(Allocate<Read>())));
   while (true) {
     GCPtr<Value> v = output->Get(*this);
-    if (v->GetType() == Value::Type::kCons) {
-      auto& cons = v->AsCons();
-      std::cout << cons.head->Get(*this)->AsChar();
-      output = GCPtr<Lazy>(*this, cons.tail);
-    } else if (v->GetType() == Value::Type::kNil) {
-      break;
-    } else {
-      throw std::runtime_error("type error in output");
+    if (v->GetType() != Value::Type::kUnion) {
+      throw std::runtime_error(StrCat("malformed string: tail is ",
+                                      Name(v->GetType()), ", not list"));
     }
+    const Union& u = v->AsUnion();
+    if (u.type_id != core::UnionType::Id::kList) {
+      throw std::runtime_error(
+          StrCat("malformed string: tail is ", u.type_id, ", not list"));
+    }
+    if (u.index == 1) break;
+    GCPtr<Value> head = u.elements[0]->Get(*this);
+    std::cout << head->AsChar();
+    output = u.elements[1];
   }
 }
 

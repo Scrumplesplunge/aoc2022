@@ -58,16 +58,19 @@ namespace core {
 
 std::ostream& operator<<(std::ostream&, const Identifier&);
 
-std::ostream& operator<<(std::ostream&, const Decons&);
-std::ostream& operator<<(std::ostream&, const Detuple&);
+std::ostream& operator<<(std::ostream&, const TupleType&);
+std::ostream& operator<<(std::ostream&, const UnionType::Id&);
+std::ostream& operator<<(std::ostream&, const UnionType&);
+
+std::ostream& operator<<(std::ostream&, const MatchTuple&);
+std::ostream& operator<<(std::ostream&, const MatchUnion&);
+std::ostream& operator<<(std::ostream&, const Integer&);
+std::ostream& operator<<(std::ostream&, const Character&);
 std::ostream& operator<<(std::ostream&, const Pattern&);
 
 std::ostream& operator<<(std::ostream&, const Builtin&);
-std::ostream& operator<<(std::ostream&, const Boolean&);
-std::ostream& operator<<(std::ostream&, const Integer&);
-std::ostream& operator<<(std::ostream&, const Character&);
-std::ostream& operator<<(std::ostream&, const String&);
-std::ostream& operator<<(std::ostream&, const Cons&);
+std::ostream& operator<<(std::ostream&, const Tuple&);
+std::ostream& operator<<(std::ostream&, const UnionConstructor&);
 std::ostream& operator<<(std::ostream&, const Apply&);
 std::ostream& operator<<(std::ostream&, const Lambda&);
 std::ostream& operator<<(std::ostream&, const Binding&);
