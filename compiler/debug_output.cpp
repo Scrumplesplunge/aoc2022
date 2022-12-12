@@ -328,6 +328,8 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kConcat";
     case Builtin::kDivide:
       return output << "Builtin::kDivide";
+    case Builtin::kError:
+      return output << "Builtin::kError";
     case Builtin::kEqual:
       return output << "Builtin::kEqual";
     case Builtin::kLessThan:
