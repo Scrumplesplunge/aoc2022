@@ -9,6 +9,7 @@ namespace aoc2022 {
 namespace {
 
 const std::map<std::string_view, Keyword, std::less<>> keywords = {
+  {"data", Keyword::kData},
   {"case", Keyword::kCase},
   {"of", Keyword::kOf},
   {"let", Keyword::kLet},
@@ -38,6 +39,7 @@ const std::map<std::string_view, Symbol, std::less<>> operators = {
   {"%", Symbol::kModulo},
   {"*", Symbol::kMultiply},
   {"||", Symbol::kOr},
+  {"|", Symbol::kPipe},
   {"-", Symbol::kSubtract},
 };
 
@@ -50,7 +52,7 @@ bool IsIdentifier(char c) {
   return IsAlpha(c) || IsDigit(c) || c == '\'';
 }
 
-bool IsIdentifierStart(char c) { return IsLower(c); }
+bool IsIdentifierStart(char c) { return IsAlpha(c); }
 
 bool IsOperator(char c) {
   switch (c) {

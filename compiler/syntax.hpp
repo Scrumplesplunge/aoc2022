@@ -224,8 +224,24 @@ inline const Location& Expression::location() const {
                     value_->value);
 }
 
+struct DataDefinition {
+  struct Alternative {
+    bool operator==(const Alternative&) const = default;
+    Location location;
+    Identifier name;
+    std::vector<Expression> members;
+  };
+
+  bool operator==(const DataDefinition&) const = default;
+  Location location;
+  Identifier name;
+  std::vector<Identifier> parameters;
+  std::vector<Alternative> alternatives;
+};
+
 struct Program {
   bool operator==(const Program&) const = default;
+  std::vector<DataDefinition> data_definitions;
   std::vector<Binding> definitions;
   Location end;
 };

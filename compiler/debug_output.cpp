@@ -37,6 +37,8 @@ std::ostream& operator<<(std::ostream& output, Space x) {
 
 std::ostream& operator<<(std::ostream& output, Keyword x) {
   switch (x) {
+    case Keyword::kData:
+      return output << "Keyword::kData";
     case Keyword::kCase:
       return output << "Keyword::kCase";
     case Keyword::kOf:
@@ -101,6 +103,8 @@ std::ostream& operator<<(std::ostream& output, Symbol x) {
       return output << "Symbol::kOpenSquare";
     case Symbol::kOr:
       return output << "Symbol::kOr";
+    case Symbol::kPipe:
+      return output << "Symbol::kPipe";
     case Symbol::kSubtract:
       return output << "Symbol::kSubtract";
   }
@@ -275,6 +279,30 @@ std::ostream& operator<<(std::ostream& output, const If& x) {
 std::ostream& operator<<(std::ostream& output, const Expression& x) {
   std::visit([&output](const auto& x) { output << x; }, x->value);
   return output;
+}
+
+std::ostream& operator<<(std::ostream& output,
+                         const DataDefinition::Alternative& x) {
+  output << "Alternative(" << x.name << ", {";
+  if (!x.members.empty()) {
+    output << x.members[0];
+    for (int i = 1, n = x.members.size(); i < n; i++) {
+      output << ", " << x.members[i];
+    }
+  }
+  return output << "})";
+}
+
+std::ostream& operator<<(std::ostream& output,
+                         const DataDefinition& x) {
+  output << "DataDefinition(" << x.name << ", {";
+  if (!x.alternatives.empty()) {
+    output << x.alternatives[0];
+    for (int i = 1, n = x.alternatives.size(); i < n; i++) {
+      output << ", " << x.alternatives[i];
+    }
+  }
+  return output << "})";
 }
 
 std::ostream& operator<<(std::ostream& output, const Program& x) {

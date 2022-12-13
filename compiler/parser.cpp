@@ -32,13 +32,45 @@ struct Parser {
     syntax::Program program;
     while (true) {
       while (Consume(Space::kNewline)) {}
-      if (NextIs(Space::kEnd)) {
+      if (NextIs(Keyword::kData)) {
+        program.data_definitions.push_back(ParseDataDefinition());
+      } else if (NextIs(Space::kEnd)) {
         program.end = cursor[0].location;
         break;
+      } else {
+        program.definitions.push_back(ParseBinding());
       }
-      program.definitions.push_back(ParseBinding());
     }
     return program;
+  }
+
+  syntax::DataDefinition ParseDataDefinition() {
+    const Location location = cursor[0].location;
+    Eat(Keyword::kData);
+    syntax::Identifier name = ParseIdentifier();
+    std::vector<syntax::Identifier> parameters;
+    while (!Consume(Symbol::kEquals)) {
+      parameters.push_back(ParseIdentifier());
+    }
+    std::vector<syntax::DataDefinition::Alternative> alternatives;
+    alternatives.push_back(ParseDataDefinitionAlternative());
+    while (Consume(Symbol::kPipe)) {
+      alternatives.push_back(ParseDataDefinitionAlternative());
+    }
+    return syntax::DataDefinition(location, std::move(name),
+                                  std::move(parameters),
+                                  std::move(alternatives));
+  }
+
+  syntax::DataDefinition::Alternative ParseDataDefinitionAlternative() {
+    const Location location = cursor[0].location;
+    syntax::Identifier name = ParseIdentifier();
+    std::vector<syntax::Expression> members;
+    while (IsTerm(cursor[0])) {
+      members.push_back(ParseTerm());
+    }
+    return syntax::DataDefinition::Alternative(location, std::move(name),
+                                               std::move(members));
   }
 
   syntax::Binding ParseBinding() {

@@ -46,6 +46,7 @@ enum class Space {
 };
 
 enum class Keyword {
+  kData,
   kCase, kOf,
   kLet, kIn,
   kIf, kThen, kElse,
@@ -74,6 +75,7 @@ enum class Symbol {
   kOpenParen,              // "("
   kOpenSquare,             // "["
   kOr,                     // "||"
+  kPipe,                   // "|"
   kSubtract,               // "-"
 };
 

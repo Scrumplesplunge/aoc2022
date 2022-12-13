@@ -13,6 +13,11 @@ namespace {
 constexpr Source kBuiltin = {.filename = "builtin", .contents = "\n"};
 constexpr Location kBuiltinLocation = {&kBuiltin, 1, 1};
 
+bool IsUpper(char c) { return 'A' <= c && c <= 'Z'; }
+bool IsTypeName(std::string_view name) {
+  return !name.empty() && IsUpper(name.front());
+}
+
 template <typename... Args>
 std::string MakeMessage(Location location, const Args&... args) {
   std::ostringstream message;
@@ -216,6 +221,17 @@ struct Checker {
 
   core::Case::Alternative CheckAlternativeImpl(const syntax::Identifier& x,
                                                const syntax::Expression& value) {
+    if (IsTypeName(x.value)) {
+      // The pattern is a type constructor with no arguments.
+      const auto* u =
+          std::get_if<core::UnionConstructor>(&Lookup(x).value->value);
+      if (!u) throw Error(x.location, "not a data constructor");
+      if (u->type->alternatives.at(u->index).num_members != 0) {
+        throw Error(x.location, "wrong arity for data constructor");
+      }
+      return core::Case::Alternative(core::MatchUnion(u->type, u->index, {}),
+                                     Check(value));
+    }
     const auto n = names.size();
     core::Identifier variable = NextIdentifier(x.location);
     names.push_back(
@@ -297,6 +313,51 @@ struct Checker {
     }
     return core::Case::Alternative(core::MatchUnion(list_type, 1, {}),
                                    Check(value));
+  }
+
+  core::Case::Alternative CheckAlternativeImpl(
+      const syntax::Apply& x, const syntax::Expression& value) {
+    // An application in a pattern must be a data constructor pattern. We need
+    // to unwrap all the Apply nodes. Since Apply nodes are left-associative,
+    // the unwrapping will produce the parameters in reverse order, so they must
+    // then be examined in reverse.
+    std::vector<const syntax::Identifier*> parameters;
+    const syntax::Apply* e = &x;
+    while (true) {
+      const auto* i = std::get_if<syntax::Identifier>(&e->x->value);
+      if (!i) {
+        throw Error(e->x.location(), "illegal pattern expression");
+      }
+      parameters.push_back(i);
+      if (const auto* a = std::get_if<syntax::Apply>(&e->f->value)) {
+        e = a;
+      } else {
+        break;
+      }
+    }
+    const auto* c = std::get_if<syntax::Identifier>(&e->f->value);
+    if (!c) throw Error(e->f.location(), "illegal pattern expression");
+    const auto* u =
+        std::get_if<core::UnionConstructor>(&Lookup(*c).value->value);
+    if (!u) throw Error(c->location, "not a data constructor");
+    const int arity = u->type->alternatives.at(u->index).num_members;
+    if ((int)parameters.size() != arity) {
+      throw Error(c->location, "wrong arity for data constructor");
+    }
+    const int n = names.size();
+    std::vector<core::Identifier> elements;
+    for (int i = parameters.size() - 1; i >= 0; i--) {
+      const core::Identifier id = NextIdentifier(parameters[i]->location);
+      names.push_back(Name{.location = parameters[i]->location,
+                           .name = parameters[i]->value,
+                           .value = id});
+      elements.push_back(id);
+    }
+    core::Pattern pattern =
+        core::MatchUnion(u->type, u->index, std::move(elements));
+    core::Expression result = Check(value);
+    names.erase(names.begin() + n, names.end());
+    return core::Case::Alternative(std::move(pattern), std::move(result));
   }
 
   core::Case::Alternative CheckAlternativeImpl(const auto& x,
@@ -389,7 +450,29 @@ struct Checker {
         [&](const auto& x) -> core::Expression { return Check(x); }, x->value);
   }
 
+  void Check(const syntax::DataDefinition& x) {
+    const core::UnionType::Id id = NextUnion(x.location);
+    std::vector<core::TupleType> alternatives;
+    for (const auto& alternative : x.alternatives) {
+      alternatives.push_back(core::TupleType(alternative.members.size()));
+    }
+    const auto type =
+        std::make_shared<core::UnionType>(id, std::move(alternatives));
+    for (int i = 0, n = x.alternatives.size(); i < n; i++) {
+      if (TryLookup(x.alternatives[i].name.value)) {
+        throw Error(x.alternatives[i].location, "redefinition of ",
+                    x.alternatives[i].name.value);
+      }
+      names.push_back(Name{.location = x.alternatives[i].location,
+                           .name = x.alternatives[i].name.value,
+                           .value = core::UnionConstructor(type, i)});
+    }
+  }
+
   core::Expression Check(const syntax::Program& program) {
+    for (const auto& data_definition : program.data_definitions) {
+      Check(data_definition);
+    }
     struct BindingData {
       core::Identifier name;
       const syntax::Binding* definition;
@@ -417,10 +500,15 @@ struct Checker {
     return core::LetRecursive(std::move(bindings), main->value);
   }
 
-  core::Identifier NextIdentifier(Location location) {
+  core::Identifier NextIdentifier(Location) {
     core::Identifier next = core::Identifier(next_id++);
-    locations.emplace(next, location);
     return next;
+  }
+
+  core::UnionType::Id NextUnion(Location) {
+    const auto id = next_union;
+    next_union = core::UnionType::Id((int)next_union + 1);
+    return id;
   }
 
   core::Expression Cons(core::Expression head, core::Expression tail) {
@@ -430,8 +518,7 @@ struct Checker {
   }
 
   int next_id = 0;
-  int next_type = 3;
-  std::map<core::Identifier, Location> locations;
+  core::UnionType::Id next_union = core::UnionType::Id::kFirstUserType;
   const std::shared_ptr<const core::UnionType> bool_type =
       std::make_unique<core::UnionType>(
           core::UnionType::Id::kBool,

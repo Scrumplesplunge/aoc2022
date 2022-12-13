@@ -15,9 +15,7 @@ std::string GetContents(const char* filename) {
   return contents;
 }
 
-constexpr aoc2022::Source kPrelude = {
-  .filename = "prelude",
-  .contents = R"(
+constexpr aoc2022::Source kPrelude = {.filename = "prelude", .contents = R"(
 true = (1 == 1)
 false = (1 == 0)
 
@@ -170,8 +168,7 @@ const x y = x
 id x = x
 
 iterate f x = x : iterate f (f x)
-)",
-};
+)"};
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {
