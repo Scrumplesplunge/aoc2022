@@ -1,0 +1,170 @@
+data Ordering = LT | EQ | GT
+data Item = Int Int | List [Item]
+-- type Packet = [Item]
+
+-- isDigit :: Char -> Bool
+isDigit x = '0' <= x && x <= '9'
+
+-- parseEnd :: (a, String) -> a
+parseEnd p =
+  case p of
+    (x, rest) ->
+      if rest == "" then
+        x
+      else
+        error ("expected eof, got trailing junk: " ++ rest)
+
+-- parseItem :: String -> (Item, String)
+parseItem ls =
+  case ls of
+    [] -> error "unexpected eof"
+    (l : ls') ->
+      if isDigit l then
+        parseInt ls
+      else if l == '[' then
+        parseListTail ls'
+      else
+        error ("syntax error, got junk: " ++ ls)
+
+-- finishParseInt :: String -> String -> (Int, String)
+finishParseInt is rest =
+  if null is then
+    error "expected int"
+  else
+    (Int (readInt (reverse is)), rest)
+
+-- parseInt :: Char -> String -> (Int, String)
+parseInt ls = parseInt' [] ls
+
+-- parseInt' :: String -> String -> (Int, String)
+parseInt' is ls =
+  case ls of
+    [] -> finishParseInt is ls
+    (l : ls') ->
+      if isDigit l then
+        parseInt' (l : is) ls'
+      else
+        finishParseInt is ls
+
+-- parseListTail :: String -> ([Item], String)
+parseListTail ls =
+  case ls of
+    (l : ls') -> (case l of
+      ']' -> (List [], ls')
+      l -> parseListElem [] ls
+    )
+
+-- parseListElem :: [Item] -> String -> ([Item], String)
+parseListElem is ls =
+  case parseItem ls of
+    (i, ls') -> parseListJoin (i : is) ls'
+
+parseListJoin is ls =
+  case ls of
+    [] -> error ls
+    (l : ls') -> (case l of
+      ']' -> (List (reverse is), ls')
+      ',' -> parseListElem is ls'
+      l -> error ls
+    )
+
+-- group :: [String] -> [(Int, String, String)]
+group = group' 1
+group' n ls =
+  case ls of
+    [] -> []
+    (l1 : ls') -> case ls' of
+      (l2 : ls'') -> case ls'' of
+        [] -> [(n, l1, l2)]
+        (l3 : ls''') ->
+          if l3 == "" then
+            (n, l1, l2) : group' (n + 1) ls'''
+          else
+            error "expected blank line"
+
+-- ungroup :: [(Int, a, a)] -> [a]
+ungroup xs =
+  case xs of
+    [] -> []
+    (x : xs') -> case x of
+      (n, a, b) -> a : b : ungroup xs'
+
+-- extractList :: Item -> [Item]
+extractList l =
+  case l of
+    (List ls) -> ls
+    (Int i) -> error ("expected list, got " ++ showInt i)
+
+-- parseList :: String -> [Item]
+parseList = extractList . parseEnd . parseItem
+
+-- parseGroup :: (String, String) -> (Packet, Packet)
+parseGroup p =
+  case p of
+    (n, l, r) -> (n, parseList l, parseList r)
+
+-- parse :: String -> [(Packet, Packet)]
+parse = map parseGroup . group . lines
+
+-- compareItems :: Item -> Item -> Ordering
+compareItems a b =
+  case a of
+    (Int ai) -> (case b of
+      (Int bi) -> if ai < bi then LT else if ai > bi then GT else EQ
+      (List bl) -> compareLists [Int ai] bl
+    )
+    (List al) -> (case b of
+      (Int bi) -> compareLists al [Int bi]
+      (List bl) -> compareLists al bl
+    )
+
+-- compareLists :: [Item] -> [Item] -> Ordering
+compareLists as bs =
+  case as of
+    [] -> (case bs of
+      [] -> EQ
+      (b : bs') -> LT
+    )
+    (a : as') -> (case bs of
+      [] -> GT
+      (b : bs') -> (case compareItems a b of
+        LT -> LT
+        EQ -> compareLists as' bs'
+        GT -> GT
+      )
+    )
+
+-- packetLess :: [Item] -> [Item] -> Bool
+packetLess a b = compareLists a b == LT
+
+-- ordered :: (Int, [Item], [Item]) -> Bool
+ordered p =
+  case p of
+    (n, a, b) -> packetLess a b
+
+-- index :: (Int, a, b) -> Int
+index p =
+  case p of
+    (n, a, b) -> n
+
+-- indexOf :: a -> [a] -> Int
+indexOf x xs = indexOf' 1 x xs
+indexOf' n x xs =
+  case xs of
+    [] -> error "target value not found"
+    (x' : xs') ->
+      if x == x' then
+        n
+      else
+        indexOf' (n + 1) x xs'
+
+a = [List [Int 2]]
+b = [List [Int 6]]
+addDividers xs = a : b : xs
+decoderKey xs = indexOf a xs * indexOf b xs
+
+part1 = sum . map index . filter ordered
+part2 = decoderKey . sortBy packetLess . addDividers . ungroup
+
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse
