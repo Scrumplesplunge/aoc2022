@@ -585,6 +585,26 @@ struct Not : public NativeFunction<1> {
   }
 };
 
+struct Chr : public NativeFunction<1> {
+  GCPtr<Value> Run(Interpreter& interpreter,
+                   std::span<GCPtr<Lazy>, 1> args) override {
+    const std::int64_t i = args[0]->Get(interpreter)->AsInt64();
+    if (0 <= i && i < 128) {
+      return interpreter.Allocate<Char>(static_cast<char>(i));
+    } else {
+      throw std::runtime_error(StrCat("Value ", i, " is out of range for chr"));
+    }
+  }
+};
+
+struct Ord : public NativeFunction<1> {
+  GCPtr<Value> Run(Interpreter& interpreter,
+                   std::span<GCPtr<Lazy>, 1> args) override {
+    const char c = args[0]->Get(interpreter)->AsChar();
+    return interpreter.Allocate<Int64>(static_cast<std::int64_t>(c));
+  }
+};
+
 template <auto F>
 struct BinaryOperatorInt64 : public NativeFunction<2> {
   GCPtr<Value> Run(Interpreter& interpreter,
@@ -1099,6 +1119,8 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Add>());
     case core::Builtin::kAnd:
       return Allocate<NativeClosure>(Allocate<And>());
+    case core::Builtin::kChr:
+      return Allocate<NativeClosure>(Allocate<Chr>());
     case core::Builtin::kConcat:
       return Allocate<NativeClosure>(Allocate<Concat>());
     case core::Builtin::kDivide:
@@ -1117,6 +1139,8 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Not>());
     case core::Builtin::kOr:
       return Allocate<NativeClosure>(Allocate<Or>());
+    case core::Builtin::kOrd:
+      return Allocate<NativeClosure>(Allocate<Ord>());
     case core::Builtin::kReadInt:
       return Allocate<NativeClosure>(Allocate<ReadInt>());
     case core::Builtin::kShowInt:

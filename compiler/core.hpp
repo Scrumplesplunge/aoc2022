@@ -90,6 +90,7 @@ class Expression {
 enum class Builtin {
   kAdd,
   kAnd,
+  kChr,
   kConcat,
   kDivide,
   kError,
@@ -99,6 +100,7 @@ enum class Builtin {
   kMultiply,
   kNot,
   kOr,
+  kOrd,
   kReadInt,
   kShowInt,
   kSubtract,

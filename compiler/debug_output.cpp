@@ -392,6 +392,8 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kAdd";
     case Builtin::kAnd:
       return output << "Builtin::kAnd";
+    case Builtin::kChr:
+      return output << "Builtin::kChr";
     case Builtin::kConcat:
       return output << "Builtin::kConcat";
     case Builtin::kDivide:
@@ -410,6 +412,8 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kNot";
     case Builtin::kOr:
       return output << "Builtin::kOr";
+    case Builtin::kOrd:
+      return output << "Builtin::kOrd";
     case Builtin::kReadInt:
       return output << "Builtin::kReadInt";
     case Builtin::kShowInt:
