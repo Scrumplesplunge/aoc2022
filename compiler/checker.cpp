@@ -530,6 +530,12 @@ struct Checker {
   const core::Expression nil = core::UnionConstructor(list_type, 1);
   std::vector<Name> names = {
       Name{.location = kBuiltinLocation,
+           .name = "False",
+           .value = core::UnionConstructor(bool_type, 0)},
+      Name{.location = kBuiltinLocation,
+           .name = "True",
+           .value = core::UnionConstructor(bool_type, 1)},
+      Name{.location = kBuiltinLocation,
            .name = "chr",
            .value = core::Builtin::kChr},
       Name{.location = kBuiltinLocation,
