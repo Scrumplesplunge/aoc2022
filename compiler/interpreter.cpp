@@ -621,18 +621,23 @@ using Multiply = BinaryOperatorInt64<[](auto l, auto r) { return l * r; }>;
 using Divide = BinaryOperatorInt64<[](auto l, auto r) { return l / r; }>;
 using Modulo = BinaryOperatorInt64<[](auto l, auto r) { return l % r; }>;
 
-template <auto F>
-struct BinaryOperatorBool : public NativeFunction<2> {
+struct And : public NativeFunction<2> {
   GCPtr<Value> Run(Interpreter& interpreter,
-             std::span<GCPtr<Lazy>, 2> args) override {
+                   std::span<GCPtr<Lazy>, 2> args) override {
     GCPtr<Value> l = args[0]->Get(interpreter);
-    GCPtr<Value> r = args[1]->Get(interpreter);
-    return interpreter.Bool(F(l->AsBool(), r->AsBool()));
+    if (!l->AsBool()) return l;
+    return args[1]->Get(interpreter);
   }
 };
 
-using And = BinaryOperatorBool<[](bool l, bool r) { return l && r; }>;
-using Or = BinaryOperatorBool<[](bool l, bool r) { return l || r; }>;
+struct Or : public NativeFunction<2> {
+  GCPtr<Value> Run(Interpreter& interpreter,
+                   std::span<GCPtr<Lazy>, 2> args) override {
+    GCPtr<Value> l = args[0]->Get(interpreter);
+    if (l->AsBool()) return l;
+    return args[1]->Get(interpreter);
+  }
+};
 
 struct Equal : public NativeFunction<2> {
   bool Run(Interpreter& interpreter, Lazy* lazy_l, Lazy* lazy_r) {
