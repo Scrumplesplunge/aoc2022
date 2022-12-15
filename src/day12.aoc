@@ -1,0 +1,129 @@
+data Maybe a = Just a | Nothing
+
+-- catMaybes :: [Maybe a] -> [a]
+catMaybes ms =
+  case ms of
+    [] -> []
+    (m : ms') -> case m of
+      Nothing -> catMaybes ms'
+      Just x -> x : catMaybes ms'
+
+data Cell = Cell Char Int Int      -- Cell value x y
+data Map = Map Cell Cell [[Cell]]  -- Map start end grid
+
+-- locate :: Char -> [[Cell]] -> Cell
+locate v rs =
+  case rs of
+    [] -> error (v : " not found")
+    (r : rs') -> locate' v r rs'
+locate' v cs rs =
+  case cs of
+    [] -> locate v rs
+    (c' : cs') -> case c' of
+      (Cell v' x y) ->
+        if v == v' then
+          c'
+        else
+          locate' v cs' rs
+
+-- cells :: String -> [[Cell]]
+cells = cells' 0 . lines
+cells' y rs =
+  case rs of
+    [] -> []
+    (r : rs') -> rowCells 0 y r : cells' (y + 1) rs'
+
+rowCells x y cs =
+  case cs of
+    [] -> []
+    (c : cs') -> Cell c x y : rowCells (x + 1) y cs'
+
+-- parse :: String -> Map
+parse input =
+  let
+    grid = cells input
+    start = locate 'S' grid
+    end = locate 'E' grid
+  in
+    Map start end grid
+
+data Node = Node Int Cell
+distance n =
+  case n of
+    Node d c -> d
+cell n =
+  case n of
+    Node d c -> c
+
+-- fetch :: Int -> Int -> [[Cell]] -> Maybe Cell
+fetch x y grid =
+  case drop y (take (y + 1) grid) of
+    [] -> Nothing
+    (r : rs) -> case drop x (take (x + 1) r) of
+      [] -> Nothing
+      (c : cs) -> Just c
+
+height c =
+  case c of
+    'S' -> ord 'a'
+    'E' -> ord 'z'
+    c -> ord c
+
+canStepForward h c =
+  case c of
+    Cell h' x y -> height h' - height h <= 1
+
+canStepBackward h c =
+  case c of
+    Cell h' x y -> height h - height h' <= 1
+
+step p grid n =
+  case n of
+    (Node i c) -> case c of
+      (Cell h x y) ->
+        let
+          node = Node (i + 1)
+          up = fetch x (y - 1) grid
+          down = fetch x (y + 1) grid
+          left = fetch (x - 1) y grid
+          right = fetch (x + 1) y grid
+          neighbours = catMaybes [up, down, left, right]
+        in map node (filter (p h) neighbours)
+
+isEnd n =
+  case n of
+    Node d c -> case c of
+      Cell h x y -> h == 'E'
+
+isLowest n =
+  case n of
+    Node d c -> case c of
+      Cell h x y -> h == 'S' || h == 'a'
+
+elem x xs =
+  case xs of
+    [] -> False
+    (x' : xs') -> x == x' || elem x xs'
+
+bfs p start grid = bfs' p [Node 0 start] grid []
+bfs' p frontier grid seen =
+  case frontier of
+    [] -> []
+    (f : fs) ->
+      if elem (cell f) seen then
+        bfs' p fs grid seen
+      else
+        f : bfs' p (fs ++ step p grid f) grid (cell f : seen)
+
+part1 input =
+  case input of
+    Map start end grid ->
+      (distance . head . filter isEnd . bfs canStepForward start) grid
+
+part2 input =
+  case input of
+    Map start end grid ->
+      (distance . head . filter isLowest . bfs canStepBackward end) grid
+
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse
