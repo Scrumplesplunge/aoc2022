@@ -274,7 +274,7 @@ struct Parser {
     while (true) {
       const Location location = cursor[0].location;
       if (Consume(Symbol::kOr)) {
-        result = syntax::And(location, std::move(result), ParseConjunction());
+        result = syntax::Or(location, std::move(result), ParseConjunction());
       } else {
         return result;
       }
