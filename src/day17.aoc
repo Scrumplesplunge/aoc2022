@@ -1,0 +1,176 @@
+showRow r = '|' : showRow' 7 r
+showRow' n r =
+  if n == 0 then
+    "|\n"
+  else
+    let d = if r % 2 == 1 then '#' else '.'
+    in d : showRow' (n - 1) (r / 2)
+showChamber rs = concat (map showRow rs) ++ "+-------+\n"
+
+-- ..####.
+rock1 = [60]
+-- ...#...
+-- ..###..
+-- ...#...
+rock2 = [8, 28, 8]
+-- ....#..
+-- ....#..
+-- ..###..
+rock3 = [16, 16, 28]
+-- ..#....
+-- ..#....
+-- ..#....
+-- ..#....
+rock4 = [4, 4, 4, 4]
+-- ..##...
+-- ..##...
+rock5 = [12, 12]
+
+rocks = [rock1, rock2, rock3, rock4, rock5] ++ rocks
+
+lessThan x y = y < x
+
+moveLeft r = r / 2
+tryMoveLeft rock = if all even rock then map moveLeft rock else rock
+
+moveRight r = r * 2
+tryMoveRight rock = if all (lessThan 64) rock then map moveRight rock else rock
+
+tryMove jet rock below =
+  let rock' = case jet of
+    '<' -> tryMoveLeft rock
+    '>' -> tryMoveRight rock
+    jet -> error ("bad jet: " ++ [jet])
+  in if overlaps rock' below then
+    rock
+  else
+    rock'
+
+expandChamber rock chamber = map (const 0) rock ++ [0, 0, 0] ++ chamber
+shrinkChamber chamber =
+  case chamber of
+    [] -> []
+    (c : chamber') ->
+      if c == 0 then
+        shrinkChamber chamber'
+      else
+        chamber
+
+overlaps as bs =
+  case as of
+    [] -> False
+    (a : as') -> case bs of
+      [] -> True
+      (b : bs') -> (a & b) != 0 || overlaps as' bs'
+
+combine as bs =
+  case as of
+    [] -> bs
+    (a : as') -> case bs of
+      [] -> as
+      (b : bs') -> (a | b) : combine as' bs'
+
+next loop = case loop of
+  (i, n, xs) -> case xs of
+    (x : xs') ->
+      let i' = if i + 1 < n then i + 1 else 0
+      in (x, i, (i', n, xs'))
+
+data State = State [Int] (Int, Int, String)  -- State chamber jets
+chamber s =
+  case s of
+    State chamber jets -> chamber
+
+dropRock state rock = case state of
+  State chamber jets ->
+    case dropRock' rock [] (expandChamber rock chamber) jets of
+      (chamber', jets') -> State (shrinkChamber chamber') jets'
+
+dropRock' rock above below jets = case next jets of
+  (jet, jetIndex, jets') ->
+    let rock' = tryMove jet rock below
+    in case below of
+      (b : below') ->
+        if overlaps rock' below' then
+          (reverse above ++ combine rock' below, jets')
+        else
+          dropRock' rock' (b : above) below' jets'
+
+check input =
+  case input of
+    [] -> []
+    (i : is) -> case i of
+      '<' -> '<' : check is
+      '>' -> '>' : check is
+      '\n' -> check is
+      i -> error "bad input"
+
+parse input =
+  let
+    list = check input
+    jets = list ++ jets
+  in (0, length list, jets)
+
+part1 jets =
+  let state = foldl dropRock (State [] jets) (take 2022 rocks)
+  in length (chamber state)
+
+-- Sample iteration chamber
+data Sample = Sample Int State
+jetIndex sample = case sample of
+  Sample i state -> case state of
+    State chamber jets -> case jets of
+      (i, n, js) -> i
+
+-- Loop sample iterationDelta heightDelta
+data FindLoopResult = Loop Sample Int Int | NotFound
+
+checkPair s1 s2 =
+  case s1 of
+    Sample iteration state -> case state of
+      State chamber jets -> case jets of
+        (i, n, js) -> case s2 of
+          Sample iteration' state' -> case state' of
+            State chamber' jets' -> case jets' of
+              (i', n', js') ->
+                let h = length chamber - length chamber'
+                in if i == i' && take h chamber == take h chamber' then
+                  Loop s1 (iteration - iteration') h
+                else
+                  NotFound
+
+checkLoop s ss = case ss of
+  [] -> NotFound
+  (s' : ss') -> case checkPair s s' of
+    NotFound -> checkLoop s ss'
+    loop -> loop
+
+findLoop jets = findLoop' 0 [] (State [] jets)
+findLoop' iteration seen state =
+  let
+    state' = foldl dropRock state (take 5 rocks)
+    sample = Sample (iteration + 5) state'
+  in case checkLoop sample seen of
+    NotFound -> findLoop' (iteration + 5) (sample : seen) state'
+    Loop s i h -> Loop s i h
+
+showFLR x = case x of
+  NotFound -> "NotFound\n"
+  Loop s i h -> "Loop ... " ++ showInt i ++ " " ++ showInt h ++ "\n"
+
+part2 jets = case findLoop jets of
+  Loop sample iterationDelta heightDelta -> case sample of
+    Sample iteration state ->
+      let
+        numRepeats = (1000000000000 - iteration) / iterationDelta
+        extraHeight = numRepeats * heightDelta
+        closestIteration = iteration + iterationDelta * numRepeats
+        remainingIterations = 1000000000000 - closestIteration
+        state' = foldl dropRock state (take remainingIterations rocks)
+      in case state' of
+        State chamber jets -> length chamber + extraHeight
+
+-- solve input = debugPart1 0 (State rocks [] input)
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+-- solve = showFLR . findLoop
+main = solve . parse
