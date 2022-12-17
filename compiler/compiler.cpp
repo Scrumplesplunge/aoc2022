@@ -16,9 +16,6 @@ std::string GetContents(const char* filename) {
 }
 
 constexpr aoc2022::Source kPrelude = {.filename = "prelude", .contents = R"(
-true = (1 == 1)
-false = (1 == 0)
-
 head xs = case xs of
   (x : xs') -> x
 tail xs = case xs of
@@ -26,8 +23,8 @@ tail xs = case xs of
 
 null xs =
   case xs of
-    [] -> true
-    xs -> false
+    [] -> True
+    xs -> False
 
 length xs = length' 0 xs
 length' n xs =
@@ -151,6 +148,8 @@ sortBy lt xs =
         (ls, rs) -> sortBy lt ls ++ [x] ++ sortBy lt rs
 
 lt a b = a < b
+even x = x % 2 == 0
+odd = not . even
 
 sort = sortBy lt
 
@@ -158,6 +157,15 @@ min a b = if a < b then a else b
 max a b = if a < b then b else a
 minimum xs = foldl min (head xs) (tail xs)
 maximum xs = foldl max (head xs) (tail xs)
+
+all f xs =
+  case xs of
+    [] -> True
+    (x : xs') -> f x && all f xs'
+any f xs =
+  case xs of
+    [] -> False
+    (x : xs') -> f x || any f xs'
 
 fst x = case x of
   (a, b) -> a
