@@ -1,12 +1,3 @@
-showRow r = '|' : showRow' 7 r
-showRow' n r =
-  if n == 0 then
-    "|\n"
-  else
-    let d = if r % 2 == 1 then '#' else '.'
-    in d : showRow' (n - 1) (r / 2)
-showChamber rs = concat (map showRow rs) ++ "+-------+\n"
-
 -- ..####.
 rock1 = [60]
 -- ...#...
@@ -28,11 +19,10 @@ rock5 = [12, 12]
 
 rocks = [rock1, rock2, rock3, rock4, rock5] ++ rocks
 
-lessThan x y = y < x
-
 moveLeft r = r / 2
 tryMoveLeft rock = if all even rock then map moveLeft rock else rock
 
+lessThan x y = y < x
 moveRight r = r * 2
 tryMoveRight rock = if all (lessThan 64) rock then map moveRight rock else rock
 
@@ -154,10 +144,6 @@ findLoop' iteration seen state =
     NotFound -> findLoop' (iteration + 5) (sample : seen) state'
     Loop s i h -> Loop s i h
 
-showFLR x = case x of
-  NotFound -> "NotFound\n"
-  Loop s i h -> "Loop ... " ++ showInt i ++ " " ++ showInt h ++ "\n"
-
 part2 jets = case findLoop jets of
   Loop sample iterationDelta heightDelta -> case sample of
     Sample iteration state ->
@@ -170,7 +156,5 @@ part2 jets = case findLoop jets of
       in case state' of
         State chamber jets -> length chamber + extraHeight
 
--- solve input = debugPart1 0 (State rocks [] input)
 solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
--- solve = showFLR . findLoop
 main = solve . parse
