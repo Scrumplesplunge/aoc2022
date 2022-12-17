@@ -1,0 +1,107 @@
+data Sensor = Sensor Int Int Int Int
+
+eat s i =
+  let
+    n = length s
+  in if take n i == s then
+    drop n i
+  else
+    error ("expected '" ++ s ++ "'")
+
+parseInt input = parseInt' [] input
+parseInt' ds input =
+  case input of
+    [] -> finishParseInt ds input
+    (i : is) ->
+      if i == '-' || ('0' <= i && i <= '9') then
+        parseInt' (i : ds) is
+      else
+        finishParseInt ds input
+finishParseInt ds input =
+  if null ds then
+    error ("expected number, got '" ++ take 3 input ++ "...'")
+  else
+    (readInt (reverse ds), input)
+
+parseSensor s =
+  let
+    x1 = parseInt (eat "Sensor at x=" s)
+    y1 = parseInt (eat ", y=" (snd x1))
+    x2 = parseInt (eat ": closest beacon is at x=" (snd y1))
+    y2 = parseInt (eat ", y=" (snd x2))
+  in Sensor (fst x1) (fst y1) (fst x2) (fst y2)
+
+parse = map parseSensor . lines
+
+data Edge = Enter | Exit
+
+abs x = if x < 0 then 0 - x else x
+range s =
+  case s of
+    Sensor x1 y1 x2 y2 -> abs (x1 - x2) + abs (y1 - y2)
+
+edges y s =
+  case s of
+    Sensor x1 y1 x2 y2 ->
+      let r = range s - abs (y - y1)
+      in if r >= 0 then
+        [(x1 - r, Enter), (x1 + r + 1, Exit)]
+      else
+        []
+
+data State = InRange Int Int | OutOfRange
+
+enter x s =
+  case s of
+    OutOfRange -> InRange x 1
+    InRange x' n -> InRange x' (n + 1)
+
+exit x s =
+  case s of
+    OutOfRange -> error "exited without entering"
+    InRange x' n ->
+      if n > 1 then
+        (0, InRange x' (n - 1))
+      else
+        (x - x', OutOfRange)
+
+count es = count' 0 OutOfRange es
+count' n state es =
+  case es of
+    [] -> if state != OutOfRange then error "infinite" else n
+    (e : es') -> case e of
+      (x, t) -> case t of
+        Enter -> count' n (enter x state) es'
+        Exit -> case exit x state of
+          (m, state') -> count' (n + m) state' es'
+
+beacons y = nub . beacons' y
+beacons' y sensors =
+  case sensors of
+    [] -> []
+    (s : sensors') -> case s of
+      Sensor x1 y1 x2 y2 ->
+        if y2 == y then
+          x2 : beacons' y sensors'
+        else
+          beacons' y sensors'
+numBeacons y = length . beacons y
+
+edgeCompare a b =
+  case a of
+    (ax, at) -> case b of
+      (bx, bt) -> if ax == bx then at == Enter else ax < bx
+
+showEdge e = case e of
+  Enter -> "Enter"
+  Exit -> "Exit"
+showPair a = case a of
+  (x, t) -> "(" ++ showInt x ++ ", " ++ showEdge t ++ ")"
+showAll = concat . intersperse "\n" . map showPair
+
+numInRange y = count . sortBy edgeCompare . concat . map (edges y)
+numEmpty y sensors = numInRange y sensors - numBeacons y sensors
+part1 = numEmpty 2000000
+
+solve input = showInt (part1 input) ++ "\n"
+main = solve . parse
