@@ -56,6 +56,8 @@ enum class Symbol {
   kAdd,                    // "+"
   kAnd,                    // "&&"
   kArrow,                  // "->"
+  kBitwiseAnd,             // "&"
+  kBitwiseOr,              // "|"
   kCloseParen,             // ")"
   kCloseSquare,            // "]"
   kColon,                  // ":"
@@ -75,7 +77,6 @@ enum class Symbol {
   kOpenParen,              // "("
   kOpenSquare,             // "["
   kOr,                     // "||"
-  kPipe,                   // "|"
   kSubtract,               // "-"
 };
 

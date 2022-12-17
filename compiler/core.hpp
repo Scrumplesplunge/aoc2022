@@ -90,6 +90,9 @@ class Expression {
 enum class Builtin {
   kAdd,
   kAnd,
+  kBitShift,
+  kBitwiseAnd,
+  kBitwiseOr,
   kChr,
   kConcat,
   kDivide,

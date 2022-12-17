@@ -54,7 +54,7 @@ struct Parser {
     }
     std::vector<syntax::DataDefinition::Alternative> alternatives;
     alternatives.push_back(ParseDataDefinitionAlternative());
-    while (Consume(Symbol::kPipe)) {
+    while (Consume(Symbol::kBitwiseOr)) {
       alternatives.push_back(ParseDataDefinitionAlternative());
     }
     return syntax::DataDefinition(location, std::move(name),
@@ -230,8 +230,33 @@ struct Parser {
     }
   }
 
-  syntax::Expression ParseConcat() {
+  syntax::Expression ParseBitwiseAnd() {
     syntax::Expression result = ParseSum();
+    while (true) {
+      const Location location = cursor[0].location;
+      if (Consume(Symbol::kBitwiseAnd)) {
+        result = syntax::BitwiseAnd(location, std::move(result), ParseSum());
+      } else {
+        return result;
+      }
+    }
+  }
+
+  syntax::Expression ParseBitwiseOr() {
+    syntax::Expression result = ParseBitwiseAnd();
+    while (true) {
+      const Location location = cursor[0].location;
+      if (Consume(Symbol::kBitwiseOr)) {
+        result =
+            syntax::BitwiseOr(location, std::move(result), ParseBitwiseAnd());
+      } else {
+        return result;
+      }
+    }
+  }
+
+  syntax::Expression ParseConcat() {
+    syntax::Expression result = ParseBitwiseOr();
     const Location location = cursor[0].location;
     if (!Consume(Symbol::kConcat)) return result;
     return syntax::Concat(location, std::move(result), ParseConcat());

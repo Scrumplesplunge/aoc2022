@@ -93,6 +93,20 @@ struct Checker {
     return core::Tuple(std::move(elements));
   }
 
+  core::Expression Check(const syntax::BitwiseAnd& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kBitwiseAnd, std::move(a)),
+                       std::move(b));
+  }
+
+  core::Expression Check(const syntax::BitwiseOr& x) {
+    core::Expression a = Check(x.a);
+    core::Expression b = Check(x.b);
+    return core::Apply(core::Apply(core::Builtin::kBitwiseOr, std::move(a)),
+                       std::move(b));
+  }
+
   core::Expression Check(const syntax::Add& x) {
     core::Expression a = Check(x.a);
     core::Expression b = Check(x.b);
@@ -550,6 +564,9 @@ struct Checker {
       Name{.location = kBuiltinLocation,
            .name = "readInt",
            .value = core::Builtin::kReadInt},
+      Name{.location = kBuiltinLocation,
+           .name = "shift",
+           .value = core::Builtin::kBitShift},
       Name{.location = kBuiltinLocation,
            .name = "showInt",
            .value = core::Builtin::kShowInt},

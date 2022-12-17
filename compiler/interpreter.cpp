@@ -620,6 +620,13 @@ using Subtract = BinaryOperatorInt64<[](auto l, auto r) { return l - r; }>;
 using Multiply = BinaryOperatorInt64<[](auto l, auto r) { return l * r; }>;
 using Divide = BinaryOperatorInt64<[](auto l, auto r) { return l / r; }>;
 using Modulo = BinaryOperatorInt64<[](auto l, auto r) { return l % r; }>;
+using BitwiseAnd = BinaryOperatorInt64<[](auto l, auto r) { return l & r; }>;
+using BitwiseOr = BinaryOperatorInt64<[](auto l, auto r) { return l | r; }>;
+using BitShift = BinaryOperatorInt64<[](auto l, auto r) {
+  // These brackets look redundant, but the compiler cannot parse this without
+  // them, presumably because it is inside <> brackets for the template.
+  return (r > 0 ? l << r : l >> -r);
+}>;
 
 struct And : public NativeFunction<2> {
   GCPtr<Value> Run(Interpreter& interpreter,
@@ -1124,6 +1131,12 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
       return Allocate<NativeClosure>(Allocate<Add>());
     case core::Builtin::kAnd:
       return Allocate<NativeClosure>(Allocate<And>());
+    case core::Builtin::kBitShift:
+      return Allocate<NativeClosure>(Allocate<BitShift>());
+    case core::Builtin::kBitwiseAnd:
+      return Allocate<NativeClosure>(Allocate<BitwiseAnd>());
+    case core::Builtin::kBitwiseOr:
+      return Allocate<NativeClosure>(Allocate<BitwiseOr>());
     case core::Builtin::kChr:
       return Allocate<NativeClosure>(Allocate<Chr>());
     case core::Builtin::kConcat:

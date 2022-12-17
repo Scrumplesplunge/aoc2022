@@ -23,6 +23,8 @@ const std::map<std::string_view, Symbol, std::less<>> operators = {
   {"+", Symbol::kAdd},
   {"&&", Symbol::kAnd},
   {"->", Symbol::kArrow},
+  {"&", Symbol::kBitwiseAnd},
+  {"|", Symbol::kBitwiseOr},
   {"||", Symbol::kOr},
   {":", Symbol::kColon},
   {",", Symbol::kComma},
@@ -39,7 +41,6 @@ const std::map<std::string_view, Symbol, std::less<>> operators = {
   {"%", Symbol::kModulo},
   {"*", Symbol::kMultiply},
   {"||", Symbol::kOr},
-  {"|", Symbol::kPipe},
   {"-", Symbol::kSubtract},
 };
 

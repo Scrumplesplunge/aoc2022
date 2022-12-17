@@ -26,6 +26,8 @@ std::ostream& operator<<(std::ostream&, const Character&);
 std::ostream& operator<<(std::ostream&, const String&);
 std::ostream& operator<<(std::ostream&, const List&);
 std::ostream& operator<<(std::ostream&, const Tuple&);
+std::ostream& operator<<(std::ostream&, const BitwiseAnd&);
+std::ostream& operator<<(std::ostream&, const BitwiseOr&);
 std::ostream& operator<<(std::ostream&, const Add&);
 std::ostream& operator<<(std::ostream&, const Subtract&);
 std::ostream& operator<<(std::ostream&, const Multiply&);

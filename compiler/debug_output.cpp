@@ -65,6 +65,10 @@ std::ostream& operator<<(std::ostream& output, Symbol x) {
       return output << "Symbol::kAnd";
     case Symbol::kArrow:
       return output << "Symbol::kArrow";
+    case Symbol::kBitwiseAnd:
+      return output << "Symbol::kBitwiseAnd";
+    case Symbol::kBitwiseOr:
+      return output << "Symbol::kBitwiseOr";
     case Symbol::kCloseParen:
       return output << "Symbol::kCloseParen";
     case Symbol::kCloseSquare:
@@ -103,8 +107,6 @@ std::ostream& operator<<(std::ostream& output, Symbol x) {
       return output << "Symbol::kOpenSquare";
     case Symbol::kOr:
       return output << "Symbol::kOr";
-    case Symbol::kPipe:
-      return output << "Symbol::kPipe";
     case Symbol::kSubtract:
       return output << "Symbol::kSubtract";
   }
@@ -157,6 +159,14 @@ std::ostream& operator<<(std::ostream& output, const Tuple& x) {
     }
     return output << "})";
   }
+}
+
+std::ostream& operator<<(std::ostream& output, const BitwiseAnd& x) {
+  return output << "BitwiseAnd(" << x.a << ", " << x.b << ")";
+}
+
+std::ostream& operator<<(std::ostream& output, const BitwiseOr& x) {
+  return output << "BitwiseOr(" << x.a << ", " << x.b << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Add& x) {
@@ -392,6 +402,12 @@ std::ostream& operator<<(std::ostream& output, const Builtin& x) {
       return output << "Builtin::kAdd";
     case Builtin::kAnd:
       return output << "Builtin::kAnd";
+    case Builtin::kBitShift:
+      return output << "Builtin::kBitShift";
+    case Builtin::kBitwiseAnd:
+      return output << "Builtin::kBitwiseAnd";
+    case Builtin::kBitwiseOr:
+      return output << "Builtin::kBitwiseOr";
     case Builtin::kChr:
       return output << "Builtin::kChr";
     case Builtin::kConcat:
