@@ -517,7 +517,6 @@ struct Case final : public Closure {
   Case(Interpreter& interpreter, const core::Case& definition)
       : Closure(interpreter.Resolve(definition)), definition(definition) {}
   GCPtr<Value> RunBody(Interpreter& interpreter) override {
-    std::vector<Lazy*> values;
     GCPtr<Value> v = interpreter.Evaluate(definition.value);
     for (const auto& alternative : definition.alternatives) {
       if (GCPtr<Value> r = interpreter.TryAlternative(v, alternative)) {
@@ -1199,7 +1198,11 @@ GCPtr<Value> Interpreter::Evaluate(const core::UnionConstructor& x) {
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Apply& x) {
-  return LazyEvaluate(x)->Get(*this);
+  stack.push_back(LazyEvaluate(x.x));
+  Evaluate(x.f)->Enter(*this);
+  GCPtr<Value> v = stack.back()->Get(*this);
+  stack.pop_back();
+  return v;
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Lambda& x) {
@@ -1207,15 +1210,54 @@ GCPtr<Value> Interpreter::Evaluate(const core::Lambda& x) {
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Let& x) {
-  return LazyEvaluate(x)->Get(*this);
+  names[x.binding.name].push_back(LazyEvaluate(x.binding.result));
+  GCPtr<Value> result = Evaluate(x.result);
+  names[x.binding.name].pop_back();
+  return result;
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::LetRecursive& x) {
-  return LazyEvaluate(x)->Get(*this);
+  std::vector<Lazy*> holes;
+  for (const auto& [id, value] : x.bindings) {
+    GCPtr<Lazy> l =
+        Allocate<Lazy>(Allocate<Error>("this should never be executed"));
+    names[id].push_back(l);
+    holes.push_back(l);
+  }
+  for (int i = 0, n = x.bindings.size(); i < n; i++) {
+    // There are two possible cases for the return value here.
+    //
+    //   * The return value is the value itself, which is currently just
+    //     a hole. In this case, the expression has no weak head normal form:
+    //     it diverges, so we replace it with an error.
+    //   * The return value is *not* the value itself. In this case, we will
+    //     overwrite the hole with the thunk for the actual value. This may
+    //     refer to the value itself internally, at which point it will
+    //     evaluate as the newly-assigned value.
+    GCPtr<Lazy> value = LazyEvaluate(x.bindings[i].result);
+    if (holes[i] == value) {
+      *holes[i] = Lazy(Allocate<Error>("divergence"));
+    } else {
+      *holes[i] = *value;
+    }
+  }
+  GCPtr<Value> result = Evaluate(x.result);
+  for (const auto& [id, value] : x.bindings) {
+    names[id].pop_back();
+  }
+  return result;
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Case& x) {
-  return LazyEvaluate(x)->Get(*this);
+  GCPtr<Value> v = Evaluate(x.value);
+  for (const auto& alternative : x.alternatives) {
+    if (GCPtr<Value> r = TryAlternative(v, alternative)) {
+      return r;
+    }
+  }
+  throw std::runtime_error(StrCat("non-exhaustative case: nothing to match ",
+                                  Name(v->GetType()),
+                                  ". core: ", x));
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Expression& x) {
