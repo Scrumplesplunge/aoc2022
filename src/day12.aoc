@@ -100,11 +100,6 @@ isLowest n =
     Node d c -> case c of
       Cell h x y -> h == 'S' || h == 'a'
 
-elem x xs =
-  case xs of
-    [] -> False
-    (x' : xs') -> x == x' || elem x xs'
-
 bfs p start grid = bfs' p [Node 0 start] grid []
 bfs' p frontier grid seen =
   case frontier of

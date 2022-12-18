@@ -32,6 +32,11 @@ length' n xs =
     [] -> n
     (x : xs') -> length' (n + 1) xs'
 
+elem x xs =
+  case xs of
+    [] -> False
+    (x' : xs') -> x == x' || elem x xs'
+
 delete x ys =
   case ys of
     [] -> []
@@ -150,6 +155,7 @@ sortBy lt xs =
 lt a b = a < b
 even x = x % 2 == 0
 odd = not . even
+abs x = if x < 0 then 0 - x else x
 
 sort = sortBy lt
 

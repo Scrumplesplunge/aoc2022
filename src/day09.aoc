@@ -6,7 +6,6 @@ parseLine l =
         (n : nil) -> (d, readInt n)
 
 neg x = 0 - x
-abs x = if x < 0 then neg x else x
 
 move d h =
   case h of
