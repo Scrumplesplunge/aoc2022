@@ -1,0 +1,92 @@
+listToPoint xyzn = case xyzn of
+  (x : yzn) -> case yzn of
+    (y : zn) -> case zn of
+      (z : n) ->
+        if null n then
+          (x, y, z)
+        else
+          error "bad point"
+
+-- type Grid = [(Int, [(Int, [Int])])]
+add grid p = case p of
+  (x, y, z) -> case grid of
+    [] -> [(x, [(y, [z])])]
+    (g : grid') -> case g of
+      (x', ps) ->
+        if x == x' then
+          (x, addX y z ps) : grid'
+        else
+          g : add grid' p
+addX y z ps = case ps of
+  [] -> [(y, [z])]
+  (p : ps') -> case p of
+    (y', zs) ->
+      if y == y' then
+        (y, z : zs) : ps'
+      else
+        p : addX y z ps'
+
+makeGrid = foldl add []
+
+parse = makeGrid . map (listToPoint . map readInt . split ',') . lines
+
+data Maybe a = Just a | Nothing
+find k ps = case ps of
+  [] -> Nothing
+  (p : ps') -> case p of
+    (k', v) ->
+      if k == k' then Just v else find k ps'
+
+contains grid p =
+  case p of
+    (x, y, z) -> case find x grid of
+      Nothing -> False
+      Just grid' -> case find y grid' of
+        Nothing -> False
+        Just zs -> elem z zs
+
+neighbours p = case p of
+  (x, y, z) ->
+    let
+      xp = (x + 1, y, z)
+      xn = (x - 1, y, z)
+      yp = (x, y + 1, z)
+      yn = (x, y - 1, z)
+      zp = (x, y, z + 1)
+      zn = (x, y, z - 1)
+    in [xp, xn, yp, yn, zp, zn]
+
+points grid =
+  case grid of
+    [] -> []
+    (g : grid') -> case g of
+      (x, ps) -> pointsX x ps ++ points grid'
+pointsX x ps = case ps of
+  [] -> []
+  (p : ps') -> case p of
+    (y, zs) -> map (makePoint x y) zs ++ pointsX x ps'
+makePoint x y z = (x, y, z)
+
+part1 grid =
+  sum (map (length . filter (not . contains grid) . neighbours) (points grid))
+
+low = 0 - 1
+high = 23
+inBounds p = case p of
+  (x, y, z) ->
+    low <= x && x < high && low <= y && y < high && low <= z && z < high
+steam = steam' [(low, low, low)] []
+steam' stack seen grid = case stack of
+  [] -> seen
+  (s : stack') ->
+    if not (inBounds s) || contains seen s || contains grid s then
+      steam' stack' seen grid
+    else
+      steam' (neighbours s ++ stack') (add seen s) grid
+
+part2 grid =
+  let reachable = steam grid
+  in sum (map (length . filter (contains reachable) . neighbours) (points grid))
+
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse
