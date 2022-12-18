@@ -54,6 +54,11 @@ class GCPtr : public GCPtrBase {
   GCPtr(const GCPtr& other) : GCPtr(*other.interpreter_, other.value_) {}
   GCPtr& operator=(const GCPtr& other);
 
+  template <typename U = T>
+  requires std::convertible_to<U*, T*>
+  GCPtr(GCPtr<U>&& other);
+  GCPtr& operator=(GCPtr&& other);
+
   GCPtr& operator=(T* value) {
     value_ = value;
     return *this;
@@ -370,6 +375,37 @@ GCPtr<T>& GCPtr<T>::operator=(const GCPtr& other) {
     if (interpreter_) interpreter_->RemovePtr(this);
     interpreter_ = other.interpreter_;
     if (interpreter_) interpreter_->AddPtr(this);
+  }
+  value_ = other.value_;
+  return *this;
+}
+
+template <std::derived_from<Node> T>
+template <typename U>
+requires std::convertible_to<U*, T*>
+GCPtr<T>::GCPtr(GCPtr<U>&& other)
+    : interpreter_(other.interpreter_), value_(other.value_) {
+  if (interpreter_) {
+    next = other.next;
+    prev = other.prev;
+    other.next->prev = this;
+    other.prev->next = this;
+    other.interpreter_ = nullptr;
+  }
+}
+
+template <std::derived_from<Node> T>
+GCPtr<T>& GCPtr<T>::operator=(GCPtr<T>&& other) {
+  if (interpreter_ != other.interpreter_) {
+    if (interpreter_) interpreter_->RemovePtr(this);
+    interpreter_ = other.interpreter_;
+    if (interpreter_) {
+      next = other.next;
+      prev = other.prev;
+      other.next->prev = this;
+      other.prev->next = this;
+      other.interpreter_ = nullptr;
+    }
   }
   value_ = other.value_;
   return *this;
