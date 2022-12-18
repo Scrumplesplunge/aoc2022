@@ -535,10 +535,9 @@ struct Lambda : public Value {
   virtual void Enter(Interpreter& interpreter) = 0;
 };
 
-struct NativeFunctionBase : public Node {
+struct NativeFunctionBase {
   NativeFunctionBase(int arity) : arity(arity) {}
   virtual void Enter(Interpreter& interpreter) = 0;
-  void AddChildren(std::vector<Node*>&) override {}
   const int arity;
 };
 
@@ -756,31 +755,31 @@ struct ReadInt : public NativeFunction<1> {
   }
 };
 
+template <typename F>
 struct NativeClosure : public Lambda {
-  NativeClosure(NativeFunctionBase* f, std::vector<Lazy*> b = {})
-      : f(f), bound(std::move(b)) {
-    if ((int)bound.size() >= f->arity) {
+  NativeClosure(F f = F(), std::vector<Lazy*> b = {})
+      : f(std::move(f)), bound(std::move(b)) {
+    if ((int)bound.size() >= f.arity) {
       throw std::logic_error("creating (over)saturated native closure");
     }
   }
   void AddChildren(std::vector<Node*>& frontier) override {
-    frontier.push_back(f);
     frontier.insert(frontier.end(), bound.begin(), bound.end());
   }
   void Enter(Interpreter& interpreter) override {
-    const int required = f->arity - bound.size();
+    const int required = f.arity - bound.size();
     if (required > 1) {
       std::vector<Lazy*> newly_bound = bound;
       newly_bound.push_back(interpreter.stack.back());
       interpreter.stack.back() = interpreter.Allocate<Lazy>(
-          interpreter.Allocate<NativeClosure>(f, std::move(newly_bound)));
+          interpreter.Allocate<NativeClosure<F>>(f, std::move(newly_bound)));
     } else {
       interpreter.stack.insert(interpreter.stack.end() - 1, bound.begin(),
                                bound.end());
-      f->Enter(interpreter);
+      f.Enter(interpreter);
     }
   }
-  NativeFunctionBase* f;
+  F f;
   std::vector<Lazy*> bound;
 };
 
@@ -1127,43 +1126,43 @@ flat_set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
 GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
   switch (x) {
     case core::Builtin::kAdd:
-      return Allocate<NativeClosure>(Allocate<Add>());
+      return Allocate<NativeClosure<Add>>();
     case core::Builtin::kAnd:
-      return Allocate<NativeClosure>(Allocate<And>());
+      return Allocate<NativeClosure<And>>();
     case core::Builtin::kBitShift:
-      return Allocate<NativeClosure>(Allocate<BitShift>());
+      return Allocate<NativeClosure<BitShift>>();
     case core::Builtin::kBitwiseAnd:
-      return Allocate<NativeClosure>(Allocate<BitwiseAnd>());
+      return Allocate<NativeClosure<BitwiseAnd>>();
     case core::Builtin::kBitwiseOr:
-      return Allocate<NativeClosure>(Allocate<BitwiseOr>());
+      return Allocate<NativeClosure<BitwiseOr>>();
     case core::Builtin::kChr:
-      return Allocate<NativeClosure>(Allocate<Chr>());
+      return Allocate<NativeClosure<Chr>>();
     case core::Builtin::kConcat:
-      return Allocate<NativeClosure>(Allocate<Concat>());
+      return Allocate<NativeClosure<Concat>>();
     case core::Builtin::kDivide:
-      return Allocate<NativeClosure>(Allocate<Divide>());
+      return Allocate<NativeClosure<Divide>>();
     case core::Builtin::kError:
-      return Allocate<NativeClosure>(Allocate<MakeError>());
+      return Allocate<NativeClosure<MakeError>>();
     case core::Builtin::kEqual:
-      return Allocate<NativeClosure>(Allocate<Equal>());
+      return Allocate<NativeClosure<Equal>>();
     case core::Builtin::kLessThan:
-      return Allocate<NativeClosure>(Allocate<LessThan>());
+      return Allocate<NativeClosure<LessThan>>();
     case core::Builtin::kModulo:
-      return Allocate<NativeClosure>(Allocate<Modulo>());
+      return Allocate<NativeClosure<Modulo>>();
     case core::Builtin::kMultiply:
-      return Allocate<NativeClosure>(Allocate<Multiply>());
+      return Allocate<NativeClosure<Multiply>>();
     case core::Builtin::kNot:
-      return Allocate<NativeClosure>(Allocate<Not>());
+      return Allocate<NativeClosure<Not>>();
     case core::Builtin::kOr:
-      return Allocate<NativeClosure>(Allocate<Or>());
+      return Allocate<NativeClosure<Or>>();
     case core::Builtin::kOrd:
-      return Allocate<NativeClosure>(Allocate<Ord>());
+      return Allocate<NativeClosure<Ord>>();
     case core::Builtin::kReadInt:
-      return Allocate<NativeClosure>(Allocate<ReadInt>());
+      return Allocate<NativeClosure<ReadInt>>();
     case core::Builtin::kShowInt:
-      return Allocate<NativeClosure>(Allocate<ShowInt>());
+      return Allocate<NativeClosure<ShowInt>>();
     case core::Builtin::kSubtract:
-      return Allocate<NativeClosure>(Allocate<Subtract>());
+      return Allocate<NativeClosure<Subtract>>();
   }
   throw std::runtime_error(StrCat("unimplemented builtin: ", x));
 }
@@ -1193,7 +1192,7 @@ GCPtr<Value> Interpreter::Evaluate(const core::UnionConstructor& x) {
   if (arity == 0) {
     return Allocate<Union>(x.type->id, x.index);
   } else {
-    return Allocate<NativeClosure>(Allocate<UnionConstructor>(x));
+    return Allocate<NativeClosure<UnionConstructor>>(UnionConstructor(x));
   }
 }
 
