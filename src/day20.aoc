@@ -1,0 +1,67 @@
+parse = map readInt . lines
+
+tag xs = tag' 0 xs
+tag' i xs = case xs of
+  [] -> []
+  (x : xs') -> (i, x) : tag' (i + 1) xs'
+
+find i xs = find' 0 i xs
+find' j i xs = case xs of
+  [] -> error ":("
+  (x : xs') -> case x of
+    (i', v) ->
+      if i == i' then
+        (j, x)
+      else
+        find' (j + 1) i xs'
+
+move i n xs = case find i xs of
+  (j, x) -> case x of
+    (i', v) ->
+      let
+        k = (((j + v) % (n - 1)) + (n - 1)) % (n - 1)
+        other = take j xs ++ drop (j + 1) xs
+      in
+        take k other ++ [x] ++ drop k other
+
+mix xs = map snd (mix' 0 (length xs) (tag xs))
+mix' i n xs =
+  if i == n then
+    xs
+  else
+    mix' (i + 1) n (move i n xs)
+
+mixN n xs = mixN' n (tag xs)
+mixN' n xs =
+  if n == 0 then
+    map snd xs
+  else
+    mixN' (n - 1) (mix' 0 (length xs) xs)
+
+align xs = align' [] xs
+align' before after =
+  case after of
+    [] -> error "0 not found"
+    (x : xs) ->
+      if x == 0 then
+        after ++ reverse before
+      else
+        align' (x : before) xs
+
+part1 input =
+  let
+    n = length input
+    mixed = align (mix input)
+    get i = head (drop (i % n) mixed)
+  in get 1000 + get 2000 + get 3000
+
+part2 input =
+  let
+    n = length input
+    mul x = x * 811589153
+    mixed = align (mixN 10 (map mul input))
+    get i = head (drop (i % n) mixed)
+  in get 1000 + get 2000 + get 3000
+
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse
