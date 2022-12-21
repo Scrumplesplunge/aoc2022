@@ -1,0 +1,133 @@
+-- type Op = Char
+data Expr = Int Int | Op Op String String
+
+isDigit c = '0' <= c && c <= '9'
+parseExpr input =
+  if isDigit (head input) then
+    Int (readInt input)
+  else let
+    l = take 4 input
+    r = take 4 (drop 7 input)
+    op = head (drop 5 input)
+  in Op op l r
+
+parseDefinition input =
+  let
+    name = take 4 input
+    expr = drop 6 input
+  in (name, parseExpr expr)
+
+parse = map parseDefinition . lines
+
+get env name = case env of
+  [] -> error ("no definition for " ++ name)
+  (e : es) -> case e of
+    (name', value) -> if name == name' then value else get es name
+
+eval env expr = case expr of
+  Int x -> x
+  Op op l r -> let
+    l' = get env l
+    r' = get env r
+  in case op of
+    '+' -> l' + r'
+    '-' -> l' - r'
+    '*' -> l' * r'
+    '/' -> l' / r'
+
+evalDefinition env d = case d of
+  (name, expr) -> (name, eval env expr)
+
+part1 input = let env = map (evalDefinition env) input in get env "root"
+
+gcd a b = if b == 0 then a else gcd b (a % b)
+addFrac a b = case a of
+  (an, ad) -> case b of
+    (bn, bd) ->
+      let
+        n = an * bd + bn * ad
+        d = ad * bd
+        k = gcd n d
+      in (n / k, d / k)
+negFrac x = case x of
+  (n, d) -> (0 - n, d)
+subFrac a b = addFrac a (negFrac b)
+mulFrac a b = case a of
+  (an, ad) -> case b of
+    (bn, bd) ->
+      let
+        k1 = gcd an bd
+        k2 = gcd bn ad
+        n = (an / k1) * (bn / k2)
+        d = (ad / k2) * (bd / k1)
+      in (n, d)
+invFrac x = case x of
+  (n, d) -> (d, n)
+divFrac a b = mulFrac a (invFrac b)
+
+zero = (0, 1)
+int x = ((x, 1), zero)
+var = (zero, (1, 1))
+add a b = case a of
+  (a0, a1) -> case b of
+    (b0, b1) -> (addFrac a0 b0, addFrac a1 b1)
+neg x = case x of
+  (x0, x1) -> (negFrac x0, negFrac x1)
+sub a b = add a (neg b)
+mul a b = case a of
+  (a0, a1) -> case b of
+    (b0, b1) ->
+      if a1 == zero then
+        (mulFrac a0 b0, mulFrac a0 b1)
+      else if b1 == zero then
+        (mulFrac b0 a0, mulFrac b0 a1)
+      else
+        error "non-linear :("
+div a b = case a of
+  (a0, a1) -> case b of
+    (b0, b1) ->
+      if b1 == zero then
+        (divFrac a0 b0, divFrac a1 b0)
+      else if a0 == zero && b0 == zero then
+        (divFrac a1 b1, zero)
+      else
+        error "non-linear :("
+
+eval2 env expr = case expr of
+  Int x -> int x
+  Op op l r -> let
+    l' = get env l
+    r' = get env r
+  in case op of
+    '+' -> add l' r'
+    '-' -> sub l' r'
+    '*' -> mul l' r'
+    '/' -> div l' r'
+
+evalDefinition2 env d = case d of
+  (name, expr) ->
+    (name, if name == "humn" then var else eval2 env expr)
+
+showNum x = case x of
+  (n, d) -> showInt n ++ "/" ++ showInt d
+showVal x = case x of
+  (x0, x1) -> showNum x0 ++ " + x * " ++ showNum x1
+
+part2 input =
+  let
+    env = map (evalDefinition2 env) input
+    root = (case get input "root" of
+      Op op a b -> (a, b)
+    )
+    l = get env (fst root)
+    r = get env (snd root)
+  in case sub l r of
+    (x0, x1) -> case divFrac (negFrac x0) x1 of
+      (n, d) ->
+        if d == 1 then
+          n
+        else
+          error "not an integer :("
+
+solve input = showInt (part1 input) ++ "\n" ++ showInt (part2 input) ++ "\n"
+main = solve . parse

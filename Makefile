@@ -126,7 +126,7 @@ build/day20.%.verdict: puzzles/day20/%.output build/day20.%.output
 	src/verdict.sh $^ >$@.tmp && mv $@{.tmp,}
 
 build/day21.%.output: build/compiler src/day21.aoc puzzles/day21/%.input
-	build/compiler src/day21.aoc <puzzles/day21/$*.input >$@.tmp && mv $@{.tmp,}
+	ulimit -s 524288 && build/compiler src/day21.aoc <puzzles/day21/$*.input >$@.tmp && mv $@{.tmp,}
 build/day21.%.verdict: puzzles/day21/%.output build/day21.%.output
 	src/verdict.sh $^ >$@.tmp && mv $@{.tmp,}
 
