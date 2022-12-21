@@ -133,20 +133,20 @@ struct Lambda {
 
 struct Binding {
   bool operator==(const Binding&) const = default;
-  Identifier name;
-  Expression result;
+  Identifier variable;
+  Expression value;
 };
 
 struct Let {
   bool operator==(const Let&) const = default;
   Binding binding;
-  Expression result;
+  Expression value;
 };
 
 struct LetRecursive {
   bool operator==(const LetRecursive&) const = default;
   std::vector<Binding> bindings;
-  Expression result;
+  Expression value;
 };
 
 struct Case {

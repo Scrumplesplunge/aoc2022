@@ -470,11 +470,11 @@ std::ostream& operator<<(std::ostream& output, const Lambda& x) {
 }
 
 std::ostream& operator<<(std::ostream& output, const Binding& x) {
-  return output << "Binding(" << x.name << ", " << x.result << ")";
+  return output << "Binding(" << x.variable << ", " << x.value << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Let& x) {
-  return output << "Let(" << x.binding << ", " << x.result << ")";
+  return output << "Let(" << x.binding << ", " << x.value << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const LetRecursive& x) {
@@ -485,7 +485,7 @@ std::ostream& operator<<(std::ostream& output, const LetRecursive& x) {
       output << ", " << x.bindings[i];
     }
   }
-  return output << "}, " << x.result << ")";
+  return output << "}, " << x.value << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Case::Alternative& x) {

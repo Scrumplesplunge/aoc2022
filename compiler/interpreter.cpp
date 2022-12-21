@@ -493,10 +493,10 @@ struct Let final : public Closure {
       : Closure(interpreter.Resolve(definition)),
         definition(definition) {}
   GCPtr<Value> RunBody(Interpreter& interpreter) override {
-    interpreter.names[definition.binding.name].push_back(
-        interpreter.LazyEvaluate(definition.binding.result));
-    GCPtr<Value> result = interpreter.Evaluate(definition.result);
-    interpreter.names[definition.binding.name].pop_back();
+    interpreter.names[definition.binding.variable].push_back(
+        interpreter.LazyEvaluate(definition.binding.value));
+    GCPtr<Value> result = interpreter.Evaluate(definition.value);
+    interpreter.names[definition.binding.variable].pop_back();
     return result;
   }
   const core::Let& definition;
@@ -533,14 +533,14 @@ struct LetRecursive final : public Closure {
       //     refer to the value itself internally, at which point it will
       //     evaluate as the newly-assigned value.
       GCPtr<Lazy> value =
-          interpreter.LazyEvaluate(definition.bindings[i].result);
+          interpreter.LazyEvaluate(definition.bindings[i].value);
       if (holes[i] == value) {
         *holes[i] = Lazy(interpreter.Allocate<Error>("divergence"));
       } else {
         *holes[i] = *value;
       }
     }
-    GCPtr<Value> result = interpreter.Evaluate(definition.result);
+    GCPtr<Value> result = interpreter.Evaluate(definition.value);
     for (const auto& [id, value] : definition.bindings) {
       interpreter.names[id].pop_back();
     }
@@ -1073,23 +1073,23 @@ void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::Let& x) {
-  Resolve(bound, result, x.binding.result);
-  auto [i, is_new] = bound.emplace(x.binding.name);
-  Resolve(bound, result, x.result);
-  if (is_new) bound.erase(x.binding.name);
+  Resolve(bound, result, x.binding.value);
+  auto [i, is_new] = bound.emplace(x.binding.variable);
+  Resolve(bound, result, x.value);
+  if (is_new) bound.erase(x.binding.variable);
 }
 
 void Interpreter::ResolveImpl(flat_set<core::Identifier>& bound,
                               Captures& result, const core::LetRecursive& x) {
   std::vector<core::Identifier> newly_bound;
   for (const auto& binding : x.bindings) {
-    auto [i, is_new] = bound.emplace(binding.name);
-    if (is_new) newly_bound.push_back(binding.name);
+    auto [i, is_new] = bound.emplace(binding.variable);
+    if (is_new) newly_bound.push_back(binding.variable);
   }
   for (const auto& binding : x.bindings) {
-    Resolve(bound, result, binding.result);
+    Resolve(bound, result, binding.value);
   }
-  Resolve(bound, result, x.result);
+  Resolve(bound, result, x.value);
   for (const auto& id : newly_bound) bound.erase(id);
 }
 
@@ -1245,9 +1245,9 @@ GCPtr<Value> Interpreter::Evaluate(const core::Lambda& x) {
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Let& x) {
-  names[x.binding.name].push_back(LazyEvaluate(x.binding.result));
-  GCPtr<Value> result = Evaluate(x.result);
-  names[x.binding.name].pop_back();
+  names[x.binding.variable].push_back(LazyEvaluate(x.binding.value));
+  GCPtr<Value> result = Evaluate(x.value);
+  names[x.binding.variable].pop_back();
   return result;
 }
 
@@ -1269,14 +1269,14 @@ GCPtr<Value> Interpreter::Evaluate(const core::LetRecursive& x) {
     //     overwrite the hole with the thunk for the actual value. This may
     //     refer to the value itself internally, at which point it will
     //     evaluate as the newly-assigned value.
-    GCPtr<Lazy> value = LazyEvaluate(x.bindings[i].result);
+    GCPtr<Lazy> value = LazyEvaluate(x.bindings[i].value);
     if (holes[i] == value) {
       *holes[i] = Lazy(Allocate<Error>("divergence"));
     } else {
       *holes[i] = *value;
     }
   }
-  GCPtr<Value> result = Evaluate(x.result);
+  GCPtr<Value> result = Evaluate(x.value);
   for (const auto& [id, value] : x.bindings) {
     names[id].pop_back();
   }
