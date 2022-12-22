@@ -1,0 +1,139 @@
+-- Blueprint OreRecipe ClayRecipe ObsidianRecipe GeodeRecipe
+data Blueprint = Blueprint Int Int (Int, Int) (Int, Int)
+
+eat s i =
+  let
+    n = length s
+  in if take n i == s then
+    drop n i
+  else
+    error ("expected '" ++ s ++ "'")
+
+parseInt input = parseInt' [] input
+parseInt' ds input =
+  case input of
+    [] -> finishParseInt ds input
+    (i : is) ->
+      if i == '-' || ('0' <= i && i <= '9') then
+        parseInt' (i : ds) is
+      else
+        finishParseInt ds input
+finishParseInt ds input =
+  if null ds then
+    error ("expected number, got '" ++ take 3 input ++ "...'")
+  else
+    (readInt (reverse ds), input)
+
+parseBlueprint input =
+  let
+    id = parseInt (eat "Blueprint " input)
+    ore = parseInt (eat ": Each ore robot costs " (snd id))
+    clay = parseInt (eat " ore. Each clay robot costs " (snd ore))
+    obsidianOre = parseInt (eat " ore. Each obsidian robot costs " (snd clay))
+    obsidianClay = parseInt (eat " ore and " (snd obsidianOre))
+    obsidian = (fst obsidianOre, fst obsidianClay)
+    geodeOre = parseInt (eat " clay. Each geode robot costs " (snd obsidianClay))
+    geodeObsidian = parseInt (eat " ore and " (snd geodeOre))
+    geode = (fst geodeOre, fst geodeObsidian)
+    end = eat " obsidian." (snd geodeObsidian)
+  in if null end then
+    Blueprint (fst ore) (fst clay) obsidian geode
+  else
+    error ("Failed to parse blueprint: " ++ input)
+
+parse = map parseBlueprint . lines
+
+add q1 q2 = case q1 of
+  (ore, clay, obsidian, geode) -> case q2 of
+    (ore', clay', obsidian', geode') ->
+      (ore + ore', clay + clay', obsidian + obsidian', geode + geode')
+addOre n q = case q of
+  (ore, clay, obsidian, geode) -> (ore + n, clay, obsidian, geode)
+addClay n q = case q of
+  (ore, clay, obsidian, geode) -> (ore, clay + n, obsidian, geode)
+addObsidian n q = case q of
+  (ore, clay, obsidian, geode) -> (ore, clay, obsidian + n, geode)
+addGeode n q = case q of
+  (ore, clay, obsidian, geode) -> (ore, clay, obsidian, geode + n)
+removeOre n = addOre (0 - n)
+removeClay n = addClay (0 - n)
+removeObsidian n = addObsidian (0 - n)
+ore q = case q of
+  (o, c, b, g) -> o
+clay q = case q of
+  (o, c, b, g) -> c
+obsidian q = case q of
+  (o, c, b, g) -> b
+geode q = case q of
+  (o, c, b, g) -> g
+
+-- type Quantity = (Int, Int, Int, Int)
+data State = State Int (Int, Int, Int, Int) (Int, Int, Int, Int)
+
+tick state = case state of
+  State timeRemaining robots resources ->
+    State (timeRemaining - 1) robots (add robots resources)
+
+maxGeodes blueprint = case blueprint of
+  Blueprint oreCost clayCost obsidianCost geodeCost ->
+    let
+      canAffordOreRobot state = (case state of
+        State timeRemaining robots resources -> ore resources >= oreCost
+      )
+      canAffordClayRobot state = (case state of
+        State timeRemaining robots resources -> ore resources >= clayCost
+      )
+      canAffordObsidianRobot = (case obsidianCost of
+        (o, c) ->
+          let f state = case state of
+            State timeRemaining robots resources ->
+              ore resources >= o && clay resources >= c
+          in f
+      )
+      canAffordGeodeRobot = (case geodeCost of
+        (o, b) ->
+          let f state = case state of
+            State timeRemaining robots resources ->
+              ore resources >= o && obsidian resources >= b
+          in f
+      )
+      make addRobot removeResources state = (case state of
+        State timeRemaining robots resources ->
+          let
+            timeRemaining' = timeRemaining - 1
+            robots' = addRobot robots
+            resources' = add robots (removeResources resources)
+          in State timeRemaining' robots' resources'
+      )
+      makeOreRobot = make (addOre 1) (removeOre oreCost)
+      makeClayRobot = make (addClay 1) (removeClay clayCost)
+      makeObsidianRobot = (case obsidianCost of
+        (ore, clay) -> make (addObsidian 1) (removeOre ore . removeClay clay)
+      )
+      makeGeodeRobot = (case geodeCost of
+        (ore, obsidian) ->
+          make (addGeode 1) (removeOre ore . removeObsidian obsidian)
+      )
+      actions s = (
+        let
+          a = if canAffordOreRobot s then [makeOreRobot s] else []
+          b = if canAffordClayRobot s then [makeClayRobot s] else []
+          c = if canAffordObsidianRobot s then [makeObsidianRobot s] else []
+          d = if canAffordGeodeRobot s then [makeGeodeRobot s] else []
+        in [tick s] ++ a ++ b ++ c ++ d
+      )
+      dfs stack seen = case stack of
+        [] -> []
+        (state : stack') ->
+          if elem state seen then
+            dfs stack' seen
+          else case state of
+            State timeRemaining robots resources ->
+              if timeRemaining == 0 then
+                geode resources : dfs stack' seen
+              else
+                dfs (actions state ++ stack') (state : seen)
+    in maximum (dfs [State 9 (1, 0, 0, 0) (0, 0, 0, 0)] [])
+
+solve = concat . intersperse "\n" . map (showInt . maxGeodes)
+main = solve . parse

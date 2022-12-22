@@ -2,7 +2,7 @@
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "checker.hpp"
-#include "interpreter.hpp"
+//#include "interpreter.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -202,5 +202,5 @@ int main(int argc, char* argv[]) {
                              prelude.definitions.begin(),
                              prelude.definitions.end());
   const aoc2022::core::Expression ir = aoc2022::Check(program);
-  aoc2022::Run(ir);
+  //aoc2022::Run(ir);
 }

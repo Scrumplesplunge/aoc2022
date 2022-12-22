@@ -1,0 +1,176 @@
+data Valve = Valve String Int [String]
+name v = case v of
+  Valve n f ns -> n
+flow v = case v of
+  Valve n f ns -> f
+neighbours v = case v of
+  Valve n f ns -> ns
+
+eat s i =
+  let
+    n = length s
+  in if take n i == s then
+    drop n i
+  else
+    error ("expected '" ++ s ++ "', got '" ++ i ++ "'")
+
+parseInt input = parseInt' [] input
+parseInt' ds input =
+  case input of
+    [] -> finishParseInt ds input
+    (i : is) ->
+      if i == '-' || ('0' <= i && i <= '9') then
+        parseInt' (i : ds) is
+      else
+        finishParseInt ds input
+finishParseInt ds input =
+  if null ds then
+    error ("expected number, got '" ++ take 3 input ++ "...'")
+  else
+    (readInt (reverse ds), input)
+
+parseValveName v = (take 2 v, drop 2 v)
+parseValveList v =
+  let
+    name = parseValveName v
+    rest =
+      if take 2 (snd name) == ", " then
+        parseValveList (drop 2 (snd name))
+      else
+        ([], snd name)
+  in (fst name : fst rest, snd rest)
+
+parseValve v =
+  let
+    name = parseValveName (eat "Valve " v)
+    flow = parseInt (eat " has flow rate=" (snd name))
+    neighbours =
+      if take 10 (snd flow) == "; tunnels " then
+        parseValveList (eat "; tunnels lead to valves " (snd flow))
+      else
+        parseValveList (eat "; tunnel leads to valve " (snd flow))
+  in if not (null (snd neighbours)) then
+    error ("Trailing junk: " ++ snd neighbours)
+  else Valve (fst name) (fst flow) (fst neighbours)
+
+parse = map parseValve . lines
+
+showString s = "\"" ++ s ++ "\""
+showList vs = "[" ++ concat (intersperse ", " (map showString vs)) ++ "]"
+showValve v = case v of
+  Valve name flow neighbours ->
+    "Valve \"" ++ name ++ "\" " ++ showInt flow ++ " " ++ showList neighbours
+showInput input = concat (intersperse "\n" (map showValve input)) ++ "\n"
+
+getValve valves name =
+  case valves of
+    [] -> error ("No such valve: " ++ name)
+    (v : valves') -> case v of
+      Valve name' flow neighbours ->
+        if name == name' then v else getValve valves' name
+
+-- -- State opened flowRate totalReleased timeRemaining
+-- data State = State [String] Int Int Int
+-- 
+-- tick state = case state of
+--   State opened flowRate totalReleased timeRemaining ->
+--     State opened flowRate (totalReleased + flowRate) (timeRemaining - 1)
+-- 
+-- open valve state = case state of
+--   State opened flowRate totalReleased timeRemaining -> case valve of
+--     Valve name flow neighbours ->
+--       State (name : opened) (flowRate + flow) (totalReleased + flowRate) (timeRemaining - 1)
+-- 
+-- maxPressureReleased valves = maxPressureReleased' (State [] 0 0 30) valves "AA"
+-- maxPressureReleased' state valves location = case state of
+--   State opened flowRate totalReleased timeRemaining ->
+--     if timeRemaining == 0 then
+--       totalReleased
+--     else case getValve location valves of
+--       Valve name flow neighbours ->
+--         let
+--           state' = open (Valve name flow neighbours) state
+--           travel s l = maxPressureReleased' (tick s) valves l
+--           alreadyOpen = elem name opened
+--           goWithoutOpening = map (travel state) neighbours
+--           stopToOpen = map (travel state') neighbours
+--           options = goWithoutOpening ++ (if alreadyOpen then [] else stopToOpen)
+--         in maximum options
+
+-- State valves location opened totalReleased timeRemaining
+data State = State [Valve] String [String] Int Int
+
+flowRate state = case state of
+  State valves location opened totalReleased timeRemaining ->
+    sum (map (flow . getValve valves) opened)
+
+tick state = case state of
+  State valves location opened totalReleased timeRemaining ->
+    let totalReleased' = totalReleased + flowRate state
+    in State valves location opened totalReleased' (timeRemaining - 1)
+
+stringCompare as bs =
+  case as of
+    [] -> True
+    (a : as') -> case bs of
+      [] -> False
+      (b : bs') -> if a == b then stringCompare as' bs' else a < b
+
+open valve state = case tick state of
+  State valves location opened totalReleased timeRemaining ->
+    let opened' = sortBy stringCompare (valve : opened)
+    in State valves location opened' totalReleased timeRemaining
+
+moveTo newLocation state = case tick state of
+  State valves oldLocation opened totalReleased timeRemaining ->
+    State valves newLocation opened totalReleased timeRemaining
+
+contains as bs = length (nub (as ++ bs)) == length as
+
+atLeastAsGood a b = case a of
+  State v l o p t -> case b of
+    State v' l' o' p' t' ->
+      l == l' && p + t * (flowRate a) >= p' + t' * (flowRate b) && t >= t'
+
+assess state seen =
+  case seen of
+    [] -> (True, [state])
+    (s : seen') ->
+      let
+        a = atLeastAsGood state s
+        b = atLeastAsGood s state
+      in if a && not b then
+        (True, state : seen')
+      else if b && not a then
+        (False, seen)
+      else case assess state seen' of
+        (r, seen'') -> (r, s : seen'')
+
+maxPressureReleased valves = maximum (dfs [State valves "AA" [] 0 30] [])
+dfs stack seen =
+  case stack of
+    [] -> []
+    (state : stack') -> case assess state seen of
+      (shouldExplore, seen') ->
+        if shouldExplore then
+          case state of
+            State valves location opened totalReleased timeRemaining ->
+              if timeRemaining == 0 then
+                state : dfs stack' seen'
+              else
+                let
+                  travel n = moveTo n state
+                  isOpen = elem location opened
+                  moves = map travel (neighbours (getValve valves location))
+                  options = if isOpen then moves else open location state : moves
+                in dfs (options ++ stack') seen'
+        else
+          dfs stack' seen'
+
+showState s = case s of
+  State v l o p t ->
+    l ++ " " ++ showList o ++ " " ++ showInt p ++ " " ++ showInt t ++ "\n"
+
+part1 input = concat (map showState (dfs [State input "AA" [] 0 30] []))
+solve input = part1 input ++ "\n"
+main = solve . parse

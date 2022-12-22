@@ -336,19 +336,26 @@ std::ostream& operator<<(std::ostream& output, const Identifier& x) {
 }
 
 std::ostream& operator<<(std::ostream& output, const TupleType& x) {
-  return output << "TupleType(" << x.num_members << ")";
+  output << "TupleType({";
+  if (!x.elements.empty()) {
+    output << x.elements[0];
+    for (int i = 1, n = x.elements.size(); i < n; i++) {
+      output << ", " << x.elements[i];
+    }
+  }
+  return output << "})";
 }
 
-std::ostream& operator<<(std::ostream& output, const UnionType::Id& x) {
+std::ostream& operator<<(std::ostream& output, const TypeConstructor::Id& x) {
   return output << "Id(" << (int)x << ")";
 }
 
-std::ostream& operator<<(std::ostream& output, const UnionType& x) {
-  output << "UnionType(" << x.id << ", {";
-  if (!x.alternatives.empty()) {
-    output << x.alternatives[0];
-    for (int i = 1, n = x.alternatives.size(); i < n; i++) {
-      output << ", " << x.alternatives[i];
+std::ostream& operator<<(std::ostream& output, const TypeConstructor& x) {
+  output << "TypeConstructor(" << x.id << ", {";
+  if (!x.parameters.empty()) {
+    output << x.parameters[0];
+    for (int i = 1, n = x.parameters.size(); i < n; i++) {
+      output << ", " << x.parameters[i];
     }
   }
   return output << "})";
@@ -365,14 +372,8 @@ std::ostream& operator<<(std::ostream& output, const MatchTuple& x) {
   return output << "})";
 }
 
-std::ostream& operator<<(std::ostream& output, const MatchUnion& x) {
-  output << "MatchUnion(";
-  if (x.type) {
-    output << *x.type;
-  } else {
-    output << "nullptr";
-  }
-  output << ", " << x.index << ", {";
+std::ostream& operator<<(std::ostream& output, const MatchTypeConstructor& x) {
+  output << "MatchTypeConstructor(" << x.type << ", " << x.index << ", {";
   if (!x.elements.empty()) {
     output << x.elements[0];
     for (int i = 1, n = x.elements.size(); i < n; i++) {
@@ -451,14 +452,8 @@ std::ostream& operator<<(std::ostream& output, const Tuple& x) {
   return output << "})";
 }
 
-std::ostream& operator<<(std::ostream& output, const UnionConstructor& x) {
-  output << "UnionConstructor(";
-  if (x.type) {
-    output << *x.type;
-  } else {
-    output << "nullptr";
-  }
-  return output << ", " << x.index << ")";
+std::ostream& operator<<(std::ostream& output, const DataConstructor& x) {
+  return output << "DataConstructor(" << x.type << ", " << x.index << ")";
 }
 
 std::ostream& operator<<(std::ostream& output, const Apply& x) {
