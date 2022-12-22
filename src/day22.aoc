@@ -1,0 +1,160 @@
+find i p d xs = case xs of
+  [] -> (d i, xs)
+  (x : xs') ->
+    if p x then
+      (i, xs)
+    else
+      find (i + 1) p d xs'
+
+data Span = Span Int Int String
+data Grid = Grid [Span] [Span]
+data Action = Forward Int | TurnLeft | TurnRight
+data Direction = North | East | South | West
+
+empty c = c == ' '
+makeSpan xs =
+  let
+    start = find 1 (not . empty) (error ":(") xs
+    end = find (fst start) empty id (snd start)
+    first = fst start
+    last = fst end
+  in Span first last (take (last - first) (drop (first - 1) xs))
+
+spaces n = if n > 0 then ' ' : spaces (n - 1) else []
+pad n xs = case xs of
+  [] -> spaces n
+  (x : xs') -> x : pad (n - 1) xs'
+
+transpose xs = transpose' (concat (map (take 1) xs)) (map (drop 1) xs)
+transpose' x xs = if null x then [] else x : transpose xs
+makeGrid ls =
+  let
+    w = maximum (map length ls)
+    h = length ls
+    rows = map (pad w) ls
+    columns = transpose rows
+  in Grid (map makeSpan rows) (map makeSpan columns)
+
+
+parseInt xs = parseInt' 0 0 xs
+parseInt' v d xs =
+  let finish = if d > 0 then (v, xs) else error "expected int"
+  in case xs of
+    [] -> finish
+    (x : xs') ->
+      if '0' <= x && x <= '9' then
+        parseInt' (10 * v + (ord x - ord '0')) (d + 1) xs'
+      else finish
+
+makeActions xs = case xs of
+  [] -> []
+  (x : xs') -> case x of
+    'L' -> TurnLeft : makeActions xs'
+    'R' -> TurnRight : makeActions xs'
+    x -> case parseInt xs of
+      (i, xs') -> Forward i : makeActions xs'
+
+parse input =
+  let
+    ls = lines input
+    n = length ls
+    actions = makeActions (head (drop (n - 1) ls))
+    grid = makeGrid (take (n - 2) ls)
+  in (grid, actions)
+
+first span = case span of
+  Span f l xs -> f
+startPosition grid = case grid of
+  Grid rs cs -> case head rs of
+    Span f l xs -> (f, 1)
+directionInt d = case d of
+  East -> 0
+  South -> 1
+  West -> 2
+  North -> 3
+part1 input = case input of
+  (grid, actions) -> case part1' (startPosition grid) East grid actions of
+    (p, d) -> case p of
+      (x, y) -> 1000 * y + 4 * x + directionInt d
+
+part1' position direction grid actions = case actions of
+  [] -> (position, direction)
+  (a : as) -> case act position direction grid a of
+    (position', direction') -> part1' position' direction' grid as
+
+index i xs = case xs of
+  [] -> error ":("
+  (x : xs') -> if i == 1 then x else index (i - 1) xs'
+
+path position direction grid = case position of
+  (x, y) -> case grid of
+    Grid rs cs ->
+      let
+        c = index x cs
+        r = index y rs
+      in case direction of
+        North -> (case c of
+          Span f l xs ->
+            let ys = reverse xs ++ ys in reverse (take (y - f) xs) ++ ys
+        )
+        East -> (case r of
+          Span f l xs -> let ys = xs ++ ys in drop (x + 1 - f) xs ++ ys
+        )
+        South -> (case c of
+          Span f l xs -> let ys = xs ++ ys in drop (y + 1 - f) xs ++ ys
+        )
+        West -> case r of
+          Span f l xs ->
+            let ys = reverse xs ++ ys in reverse (take (x - f) xs) ++ ys
+
+wrap f l x = let n = l - f in ((x - f) % n + n) % n + f
+move position direction distance grid = case position of
+  (x, y) -> case grid of
+    Grid rs cs ->
+      let
+        c = index x cs
+        r = index y rs
+      in case direction of
+        North -> (case c of
+          Span f l xs -> (x, wrap f l (y - distance))
+        )
+        East -> (case r of
+          Span f l xs -> (wrap f l (x + distance), y)
+        )
+        South -> (case c of
+          Span f l xs -> (x, wrap f l (y + distance))
+        )
+        West -> case r of
+          Span f l xs -> (wrap f l (x - distance), y)
+
+walk i n xs =
+  if i == n then
+    n
+  else case xs of
+    (x : xs') ->
+      if x == '.' then
+        walk (i + 1) n xs'
+      else
+        i
+
+act position direction grid action = case action of
+  Forward i -> (
+    let
+      ps = path position direction grid
+    in (move position direction (walk 0 i ps) grid, direction)
+  )
+  TurnLeft -> (case direction of
+    North -> (position, West)
+    East -> (position, North)
+    South -> (position, East)
+    West -> (position, South)
+  )
+  TurnRight -> (case direction of
+    North -> (position, East)
+    East -> (position, South)
+    South -> (position, West)
+    West -> (position, North)
+  )
+
+solve input = showInt (part1 input) ++ "\n"
+main = solve . parse
