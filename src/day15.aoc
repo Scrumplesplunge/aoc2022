@@ -35,7 +35,6 @@ parse = map parseSensor . lines
 
 data Edge = Enter | Exit
 
-abs x = if x < 0 then 0 - x else x
 range s =
   case s of
     Sensor x1 y1 x2 y2 -> abs (x1 - x2) + abs (y1 - y2)
