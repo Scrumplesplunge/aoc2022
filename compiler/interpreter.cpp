@@ -47,11 +47,11 @@ class GCPtr : public GCPtrBase {
  public:
   GCPtr() = default;
   GCPtr(std::nullptr_t) : GCPtr() {}
-  GCPtr(Interpreter& interpreter, T* value);
+  GCPtr(Interpreter* interpreter, T* value);
   template <typename U = T>
   requires std::convertible_to<U*, T*>
-  GCPtr(const GCPtr<U>& other) : GCPtr(*other.interpreter_, other.value_) {}
-  GCPtr(const GCPtr& other) : GCPtr(*other.interpreter_, other.value_) {}
+  GCPtr(const GCPtr<U>& other) : GCPtr(other.interpreter_, other.value_) {}
+  GCPtr(const GCPtr& other) : GCPtr(other.interpreter_, other.value_) {}
   GCPtr& operator=(const GCPtr& other);
 
   template <typename U = T>
@@ -125,7 +125,7 @@ class Lazy final : public Node {
       has_value_ = true;
       computing_ = false;
     }
-    return GCPtr<Value>(interpreter, value_);
+    return GCPtr<Value>(&interpreter, value_);
   }
   void AddChildren(std::vector<Node*>& frontier) override;
  private:
@@ -364,9 +364,9 @@ struct Interpreter {
 };
 
 template <std::derived_from<Node> T>
-GCPtr<T>::GCPtr(Interpreter& interpreter, T* value)
-    : interpreter_(&interpreter), value_(value) {
-  interpreter_->AddPtr(this);
+GCPtr<T>::GCPtr(Interpreter* interpreter, T* value)
+    : interpreter_(interpreter), value_(value) {
+  if (interpreter_) interpreter_->AddPtr(this);
 }
 
 template <std::derived_from<Node> T>
@@ -602,7 +602,7 @@ struct NativeFunction : public NativeFunctionBase {
     std::array<GCPtr<Lazy>, n> args;
     const int m = interpreter.stack.size();
     for (int i = 0; i < n; i++) {
-      args[i] = GCPtr<Lazy>(interpreter, interpreter.stack[m - n + i]);
+      args[i] = GCPtr<Lazy>(&interpreter, interpreter.stack[m - n + i]);
     }
     interpreter.stack.resize(interpreter.stack.size() - n + 1);
     interpreter.stack.back() =
@@ -963,7 +963,7 @@ requires std::constructible_from<T, Args...>
 GCPtr<T> Interpreter::Allocate(Args&&... args) {
   if (int(heap.size()) >= collect_at_size) CollectGarbage();
   auto u = std::make_unique<T>(std::forward<Args>(args)...);
-  GCPtr<T> p(*this, u.get());
+  GCPtr<T> p(this, u.get());
   heap.push_back(std::move(u));
   return p;
 }
@@ -1159,46 +1159,66 @@ flat_set<core::Identifier> Interpreter::GetBindings(const core::Pattern& x) {
                     x->value);
 }
 
+NativeClosure<Add> builtin_add;
+NativeClosure<And> builtin_and;
+NativeClosure<BitShift> builtin_bit_shift;
+NativeClosure<BitwiseAnd> builtin_bitwise_and;
+NativeClosure<BitwiseOr> builtin_bitwise_or;
+NativeClosure<Chr> builtin_chr;
+NativeClosure<Concat> builtin_concat;
+NativeClosure<Divide> builtin_divide;
+NativeClosure<MakeError> builtin_error;
+NativeClosure<Equal> builtin_equal;
+NativeClosure<LessThan> builtin_less_than;
+NativeClosure<Modulo> builtin_modulo;
+NativeClosure<Multiply> builtin_multiply;
+NativeClosure<Not> builtin_not;
+NativeClosure<Or> builtin_or;
+NativeClosure<Ord> builtin_ord;
+NativeClosure<ReadInt> builtin_read_int;
+NativeClosure<ShowInt> builtin_show_int;
+NativeClosure<Subtract> builtin_subtract;
+
 GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
   switch (x) {
     case core::Builtin::kAdd:
-      return Allocate<NativeClosure<Add>>();
+      return GCPtr<Value>(nullptr, &builtin_add);
     case core::Builtin::kAnd:
-      return Allocate<NativeClosure<And>>();
+      return GCPtr<Value>(nullptr, &builtin_and);
     case core::Builtin::kBitShift:
-      return Allocate<NativeClosure<BitShift>>();
+      return GCPtr<Value>(nullptr, &builtin_bit_shift);
     case core::Builtin::kBitwiseAnd:
-      return Allocate<NativeClosure<BitwiseAnd>>();
+      return GCPtr<Value>(nullptr, &builtin_bitwise_and);
     case core::Builtin::kBitwiseOr:
-      return Allocate<NativeClosure<BitwiseOr>>();
+      return GCPtr<Value>(nullptr, &builtin_bitwise_or);
     case core::Builtin::kChr:
-      return Allocate<NativeClosure<Chr>>();
+      return GCPtr<Value>(nullptr, &builtin_chr);
     case core::Builtin::kConcat:
-      return Allocate<NativeClosure<Concat>>();
+      return GCPtr<Value>(nullptr, &builtin_concat);
     case core::Builtin::kDivide:
-      return Allocate<NativeClosure<Divide>>();
+      return GCPtr<Value>(nullptr, &builtin_divide);
     case core::Builtin::kError:
-      return Allocate<NativeClosure<MakeError>>();
+      return GCPtr<Value>(nullptr, &builtin_error);
     case core::Builtin::kEqual:
-      return Allocate<NativeClosure<Equal>>();
+      return GCPtr<Value>(nullptr, &builtin_equal);
     case core::Builtin::kLessThan:
-      return Allocate<NativeClosure<LessThan>>();
+      return GCPtr<Value>(nullptr, &builtin_less_than);
     case core::Builtin::kModulo:
-      return Allocate<NativeClosure<Modulo>>();
+      return GCPtr<Value>(nullptr, &builtin_modulo);
     case core::Builtin::kMultiply:
-      return Allocate<NativeClosure<Multiply>>();
+      return GCPtr<Value>(nullptr, &builtin_multiply);
     case core::Builtin::kNot:
-      return Allocate<NativeClosure<Not>>();
+      return GCPtr<Value>(nullptr, &builtin_not);
     case core::Builtin::kOr:
-      return Allocate<NativeClosure<Or>>();
+      return GCPtr<Value>(nullptr, &builtin_or);
     case core::Builtin::kOrd:
-      return Allocate<NativeClosure<Ord>>();
+      return GCPtr<Value>(nullptr, &builtin_ord);
     case core::Builtin::kReadInt:
-      return Allocate<NativeClosure<ReadInt>>();
+      return GCPtr<Value>(nullptr, &builtin_read_int);
     case core::Builtin::kShowInt:
-      return Allocate<NativeClosure<ShowInt>>();
+      return GCPtr<Value>(nullptr, &builtin_show_int);
     case core::Builtin::kSubtract:
-      return Allocate<NativeClosure<Subtract>>();
+      return GCPtr<Value>(nullptr, &builtin_subtract);
   }
   throw std::runtime_error(StrCat("unimplemented builtin: ", x));
 }
@@ -1305,7 +1325,7 @@ GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Builtin& x) {
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Identifier& identifier) {
-  return GCPtr<Lazy>(*this, names.at(identifier).back());
+  return GCPtr<Lazy>(this, names.at(identifier).back());
 }
 
 GCPtr<Lazy> Interpreter::LazyEvaluate(const core::Integer& x) {
