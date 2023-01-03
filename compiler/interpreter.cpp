@@ -828,7 +828,8 @@ struct UserLambda final : public Lambda {
     }
     Lazy* v = interpreter.stack.back();
     interpreter.names[definition.parameter].push_back(v);
-    interpreter.stack.back() = interpreter.LazyEvaluate(definition.result);
+    interpreter.stack.back() =
+        interpreter.Allocate<Lazy>(interpreter.Evaluate(definition.result));
     interpreter.names[definition.parameter].pop_back();
     for (const auto& [id, value] : captures) {
       interpreter.names[id].pop_back();
@@ -1224,7 +1225,7 @@ GCPtr<Value> Interpreter::Evaluate(const core::Builtin& x) {
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Identifier& identifier) {
-  return LazyEvaluate(identifier)->Get(*this);
+  return names.at(identifier).back()->Get(*this);
 }
 
 GCPtr<Value> Interpreter::Evaluate(const core::Integer& x) {
@@ -1453,8 +1454,8 @@ GCPtr<Value> Interpreter::TryAlternative(Value* v, const core::Character& c,
 }
 
 void Interpreter::Run(const core::Expression& program) {
-  GCPtr<Lazy> output = Allocate<Lazy>(
-      Allocate<Apply>(LazyEvaluate(program), Allocate<Lazy>(Allocate<Read>())));
+  GCPtr<Lazy> output = Allocate<Lazy>(Allocate<Apply>(
+      Allocate<Lazy>(Evaluate(program)), Allocate<Lazy>(Allocate<Read>())));
   while (true) {
     GCPtr<Value> v = output->Get(*this);
     if (v->GetType() != Value::Type::kUnion) {
